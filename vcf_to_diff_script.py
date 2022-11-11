@@ -9,19 +9,12 @@ parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='dir
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 
-#NOTICE: Do not use this script if you have space limitations
 args = parser.parse_args()
 vcf = args.VCF
 wd = args.working_directory
 tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
-
-print('vcf', vcf)
-print('wd', wd)
-print('tbmf', tbmf)
-print('cf', cf)
-print('cd', cd)
 
 #makes sure input path wont cause error
 if wd[-1] != '/':
@@ -45,7 +38,7 @@ def find_snps(line):
 
     return lines
 
-#for lines where len(ref) > 1 AND len(alt) == 1, these deletions are easily processed 
+#for lines where len(ref) > 1 AND len(alt) == 1 
 #currently deletions and missing data are all converted to '-'
 def process_dels(line):
     ref = line[3]
@@ -82,31 +75,32 @@ def process_others(line):
     return l
 
 #read TB mask file (different than coverage file) and generate sites to be masked
+#bed coverage file is 0 indexed, so add 1 to everything 
 def mask_TB(tbmf):
     tb_sites = {}
-    #count = 0 
     with open(tbmf) as file:
         for line in file:
-            #count += 1
             line=line.strip().split()
-            tb_sites[int(line[1])] = int(line[2])
+            tb_sites[int(line[1])+1] = int(line[2])+1
     #print('regions', tb_sites)
     return tb_sites
 
 #read coverage file and generate sites to be masked 
 #if coverage does not have HR37c reference it will throw an error (this can be changed)
-#old version
-
+#bed files are 0-indexed in col1 and 1-indexed in col2, i am adding one to both to make them one indexed
+#and to maintain their mapping logic
 def mask_low_depth(cf, cd):
     ld_sites = {}
-    #count = 0 
     prev = None
     with open(cf) as cf:
         for line in cf:
-            #count += 1
             #for currect bed coverage file 
             if line.startswith('NC_000962.3'):
                 line = line.strip().split()
+                #print('pre',line)
+                line[1] = str(int(line[1])+1)
+                line[2] = str(int(line[2])+1)
+                #print('post',line)
                 if int(line[3]) < cd:
                     #print('prev', prev)
                     #print(line)
@@ -133,7 +127,7 @@ def mask_low_depth(cf, cd):
     #    print(l, ld_sites[l])
     return ld_sites
 
-
+#when merging ld and tb masks need to make sure the added masks are not overlapping
 def check_prev_mask(prev, line):
     #currently not checking overlap to left of prev bc that indicates a bigger error
     #may need to change?
@@ -149,17 +143,18 @@ def check_prev_mask(prev, line):
     #if prev != None:
     #print('prev', prev_s, prev_e, 'line', line_s, line_e)
     if line_s >= prev_s and line_e <= prev_e:
+        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
         overlap = True
         #print('Full OVERLAP!!!!!')
+        #print('overlap',overlap, 'change', change)
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
+        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
         overlap = True 
         #print('right overlap!!!!!!')
         prev[1] = line_e
         change = prev
-    #print('overlap',overlap, 'change', change)
+        #print('overlap',overlap, 'change', change)
     return overlap, change
-
-    
 
 
 def condense_mask_regions(cf,cd,tbmf):
@@ -192,6 +187,9 @@ def condense_mask_regions(cf,cd,tbmf):
                         overlap, change = check_prev_mask(prev, [ld_start, ld_end])
                         if overlap == True and change != None:
                             #print('change', 'need to update prev!!!!!', change)
+                            #print(f'ld{ld_keys_ind} is below tb{tb_keys_ind}')
+                            #print('ld', ld_start, ld_end)
+                            #print('tb', tb_start, tb_end)
                             all_sites[change[0]] = change[1]
                     if prev == None or overlap == False:
                         all_sites[ld_start] = ld_end
@@ -205,10 +203,10 @@ def condense_mask_regions(cf,cd,tbmf):
                             #print('prev', prev, 'change', change)
                             all_sites[change[0]] = change[1]
                     if prev == None or overlap == False:
-                        if prev == None:
-                            print('first')
-                        elif overlap == False:
-                            print('overlap = ', overlap)
+                        #if prev == None:
+                        #    print('first')
+                        #elif overlap == False:
+                        #    print('overlap = ', overlap)
                         all_sites[ld_start] = tb_end
                     tb_keys_ind += 1
                     ld_keys_ind += 1
@@ -236,6 +234,9 @@ def condense_mask_regions(cf,cd,tbmf):
                     overlap,change = check_prev_mask(prev, [tb_start, tb_end])
                     if overlap == True and change != None:
                         #print('change', change)
+                        #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
+                        #print('ld', ld_start, ld_end)
+                        #print('tb', tb_start, tb_end)
                         all_sites[change[0]] = change[1]
                 if prev == None or overlap == False:
                     all_sites[tb_start] = tb_end
@@ -272,8 +273,8 @@ def condense_mask_regions(cf,cd,tbmf):
                 #print('ld', ld_start, ld_end)
                 #print('tb', tb_start, tb_end)
 
-            else:
-                print('other', 'what else could happen?')
+            #else:
+                #print('other', 'what else could happen?')
                 #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
                 #all_sites[tb_start]
 
@@ -313,320 +314,14 @@ def condense_mask_regions(cf,cd,tbmf):
             all_sites_keys = sorted(all_sites.keys())
         prev = [all_sites_keys[-1],all_sites[all_sites_keys[-1]]]
     return all_sites
-
-    
-
-
-
-
-#run this function on all generated diff functions to mask full regions
-#note that these regions are not considered missing data as they are universally masked
-'''
-def mask_TBsites(diff_file, tbmf, sample):
-    #print('TB mask regions')
-    tb_sites =  mask_TB(tbmf)
-    #keys = sorted(tb_sites.keys())
-    print('tb sites',len(tb_sites))
-    #for i in tb_sites:
-    #    print(i)
-    #print('MASK TB SITES', diff_file)
-    #print(sample)
-    with open(diff_file) as df:
-        with open(f'{wd}{sample}.masked.diff', 'w') as out:
-            for line in df:
-                keys = sorted(tb_sites.keys())
-                if not line.startswith('>'):
-                    line = line.strip().split()
-                    print('position', line[1])
-                    prevkey = None
-                    for k in keys:
-                        
-                        
-                        #print('k', k, 'tb_sites', tb_sites[k])
-                        #check if greater than first value in coverage range
-                        if int(line[2]) == 1:
-                            print('SNP')
-                            if int(line[1]) >= k:
-                                #print('k', line[1], k)
-                                #check if less than final value in coverage range
-                                #indicates that the position should be masked
-                                #break after to save time
-                                #print()
-                                
-                                if int(line[1]) < tb_sites[k]:
-                                    #print(f'in a range: MASK {line[1]}')
-                                    #line[4] = '-'
-                                    #line[-1] = '1'
-                                    #should i do this?
-                                    #missing += 1
-                                    #print('start', k)
-                                    #print('pos', line[1])
-                                    #print('end', ld_sites[k])
-                                    #print
-                                    break
-
-                                
-                                #if greater than first and last value, remove range from dict
-                                #time saver
-                                else:
-                                    #print('delete?')
-                                    #print('start', k)
-                                    #print('pos', line[1])
-                                    #print('end', tb_sites[k])
-                                    distance = int(tb_sites[k])-k
-                                    #print('dists', distance)
-                                    out.write('\t'.join(['-',str(k), str(distance)])+'\n')
-                                    
-                                    dist = tb_sites[k]-k
-                                    #prevkey = [k, dist]
-                                    #print('update','k', k, 'prevkey', prevkey)
-                                    tb_sites.pop(k)
-                                    #prevkey = (k, )
-                                    #print('len dict', len(tb_sites))
-                                    
-                                    #need to set up value for masks
-                            
-                            elif int(line[1]) < k:
-                                #print('range', k, tb_sites[k])
-                                #print('no mask?', line[1])
-                                #print('\t'.join(line))
-                                
-                                out.write('\t'.join(line)+'\n')
-                            
-                                #alts = line[4].split(',')
-                                #alt = alts[int(var)-1]
-                                #line[4] = alt
-                                #line[-1] = '1'
-                                
-                                break
-                        
-                        else:
-                            print('init','k', k, 'prevkey', prevkey)
-
-                            print('not snp!!!!!', line)
-                            #print('k', line[1], k)
-
-
-                            #the indel positions are all less than the mask region
-                            if int(line[1])+int(line[2]) < k and int(line[1]) < k:
-                                print('no overlap, too soon')
-                                #print('range', k, tb_sites[k])
-                                #print('no mask?', line[1])
-                                #print('\t'.join(line))
-                                
-                                out.write('\t'.join(line)+'\n')
-                                break
-
-                            #if greater than first and last value, remove range from dict
-                            elif int(line[1]) > tb_sites[k]:
-                                print('no overlap, too late')
-                                print('non-SNP remove from lib')
-                                print('delete?')
-                                print('start', k)
-                                print('pos', line[1])
-                                print('end', tb_sites[k])
-                                distance = int(tb_sites[k])-k
-                                #print('dists', distance)
-                                out.write('\t'.join(['-',str(k), str(distance)])+'\n')
-                                #dist = tb_sites[k]-k
-                                #prevkey = [k,dist]
-                                
-                                #print('update', prevkey )
-                                tb_sites.pop(k)
-                                #print('len dict', len(tb_sites))
-                            
-
-                            #the end of the indel overlaps with the beginning of the mask region
-                            elif int(line[1])+int(line[2]) >= k and int(line[1]) < k:
-                                print('OVERLAP!!!!! end of snp and beginnin of mask', k, line, tb_sites[k])
-                                print('end of snp', int(line[1])+int(line[2]))
-                                print('start of mask', k)
-                                print( 'start of snp', int(line[1]))
-                                print('end of mask', tb_sites[k])
-                                #if errors emerge add another conditional
-                                if line[0] == '-':
-                                    print('combine', '-',line[1], k)
-                                    print('\t'.join(['-',line[1], str(int(k)-int(line[1]))]))
-                                    out.write('\t'.join(['-',line[1], str(int(k)-int(line[1]))])+'\n')
-
-                                #dist = tb_sites[k]-k
-                                #prevkey = [k,dist]
-                                
-                                #print('update', prevkey )
-                                #print(f'in a range: MASK {line[1]}')
-                                #line[4] = '-'
-                                #line[-1] = '1'
-                                #should i do this?
-                                #missing += 1
-                                #print('start', k)
-                                #print('pos', line[1])
-                                #print('end', ld_sites[k])
-                                #print
-                                break
-                                #check if less than final value in coverage range
-                                #indicates that the position should be masked
-                                #break after to save time
-                                #print()
-                                
-                            elif int(line[1]) > k and int(line[1])+int(line[2])<tb_sites[k]:
-                                print(f'fully overlap: ignore?')
-                                #line[4] = '-'
-                                #line[-1] = '1'
-                                #should i do this?
-                                #missing += 1
-                                print('start', k)
-                                print('pos', line[1])
-                                print('end', tb_sites[k])
-                                #print
-                                break
-
-                                
-                            #if greater than first and last value, remove range from dict
-                            #time saver
-                            else:
-                                print('right side overlap?', 'prevkey', prevkey)
-                                print('start', k)
-                                print('pos', line[1])
-                                print('end', tb_sites[k])
-                                print('OVERLAP!!!!! end of snp and beginnin of mask', k, line, tb_sites[k])
-                                #print('end of snp', int(line[1])+int(line[2]))
-                                print('start of mask', k)
-                                print( 'start of snp', int(line[1]))
-                                print('end of mask', tb_sites[k])
-                                #if errors emerge add another conditional
-                                #there should be no other possibilities...
-                                if line[0] == '-':
-                                #    print('combine', '-',line[1], k)
-                                #    print('\t'.join(['-',line[1], str(int(k)-int(line[1]))]))
-                                    
-                                    print('mask up to position')
-                                    print('\t'.join(['-',str(k), str(int(line[1])-k)]))
-                                    out.write('\t'.join(['-',str(k), str(int(line[1])-k)])+'\n')
-                                    print('position after mask')
-                                    print('\t'.join(['-',line[1], line[2]])+'\n')
-                                    out.write('\t'.join(['-',line[1], line[2]])+'\n')
-                                    dist = tb_sites[k]-k
-                                    prevkey = [k,dist]
-                                
-                                    print('update', prevkey )
-                                    tb_sites.pop(k)
-                                else:
-                                    raise ValueError(f"Indel needs to be masked at {line[1]}")
-                                #distance = int(tb_sites[k])-k
-                                #print('dists', distance)
-                                #out.write('\t'.join(['-',str(k), str(distance)])+'\n')
-                                #tb_sites.pop(k)
-                                #print('len dict', len(tb_sites))
-                                
-                                #need to set up value for masks
-                            
-                        
-                            elif int(line[1]) < k:
-                                #print('range', k, tb_sites[k])
-                                #print('no mask?', line[1])
-                                #print('\t'.join(line))
-                                
-                                out.write('\t'.join(line)+'\n')
-                                
-                                #alts = line[4].split(',')
-                                #alt = alts[int(var)-1]
-                                #line[4] = alt
-                                #line[-1] = '1'
-                                
-                                break
-                            
-                        #dist = tb_sites[k]-k
-                        #prevkey = [k, dist]
-                else:
-                    out.write(line)
-                    '''
-                    
-
-'''
-def mask_LDsites(cf, cd, diff,sample):
-    #print('TB mask regions')
-    ld_sites = mask_low_depth(cf, cd)
-    #print(ld_sites)
-    #keys = sorted(tb_sites.keys())
-    #print('tb sites',len(tb_sites))
-    #for i in tb_sites:
-    #    print(i)
-    #print('MASK TB SITES', diff_file)
-    #print(sample)
-    
-    with open(diff) as df:
-        with open(f'{wd}{sample}.masked.diff', 'w') as out:
-            for line in df:
-                #print(line)
-                keys = sorted(ld_sites.keys())
-                if not line.startswith('>'):
-                    line = line.strip().split()
-                    #print('position', line[1])
-
-                    for k in keys:
-                        #print('k', k)
-                        #print('k', k, 'tb_sites', tb_sites[k])
-                        #check if greater than first value in coverage range
-                        if int(line[1]) >= k:
-                            #print('k', line[1], k)
-                            #check if less than final value in coverage range
-                            #indicates that the position should be masked
-                            #break after to save time
-                            #print()
-                            
-                            if int(line[1]) < ld_sites[k]:
-                                #print(f'in a range: MASK {line[1]}')
-                                #line[4] = '-'
-                                #line[-1] = '1'
-                                #should i do this?
-                                #missing += 1
-                                #print('start', k)
-                                #print('pos', line[1])
-                                #print('end', ld_sites[k])
-                                #print
-                                break
-                            
-                            #if greater than first and last value, remove range from dict
-                            #time saver
-                            else:
-                                #print('delete?')
-                                #print('start', k)
-                                #print('pos', line[1])
-                                #print('end', tb_sites[k])
-                                distance = int(ld_sites[k])-k
-                                #print('dists', distance)
-                                out.write('\t'.join(['-',str(k), str(distance)])+'\n')
-                                ld_sites.pop(k)
-                                #print('len dict', len(tb_sites))
-                                
-                                #need to set up value for masks
-                        
-                        elif int(line[1]) < k:
-                            #print('range', k, tb_sites[k])
-                            #print('no mask?', line[1])
-                            out.write('\t'.join(line)+'\n')
-                            #alts = line[4].split(',')
-                            #alt = alts[int(var)-1]
-                            #line[4] = alt
-                            #line[-1] = '1'
-                            break
-                        
-        
-                else:
-                    out.write(line)
-                    '''
                     
 def squish(lines):
-    #condenses diff entries that can be 
-    #with open(file) as f:
-    #with open(f'{file}squish', 'w') as o:
-    print('SQUISH')
+    #condenses diff lines that can be compressed into a single line
+    #print('SQUISH')
     prev = None
     newLines = []
     for line in lines:
         #print(line)
-
-    
         if not line[0].startswith('>'):
             if prev != None:
                 #print('line', line)
@@ -655,11 +350,6 @@ def squish(lines):
                 #print('first prev!', prev)
                 #newLines.append(line)
                 prev = line
-
-             
-                
-    
-
         #write header to new file
         else:
             newLines.append(line)
@@ -669,8 +359,7 @@ def squish(lines):
         newLines.append(prev)  
     return newLines
 
-                       
-                
+                              
 #option to write output to file
 def vcf_to_diff(vcf_file, output):
     #takes a single sample vcf and converts to diff format 
@@ -741,9 +430,9 @@ def vcf_to_diff(vcf_file, output):
                                 #o.write('\t'.join(newline)+'\n')
                                 lines.append(newline)
     #figure out how to count missing data and add stats here 
-    with open('testlines','w') as o:
-        for line in lines:
-            o.write('\t'.join(line)+'\n')
+    #with open('testlines','w') as o:
+    #    for line in lines:
+    #        o.write('\t'.join(line)+'\n')
     newLines = squish(lines)
     return newLines
 
@@ -754,49 +443,6 @@ def vcf_to_diff(vcf_file, output):
     #return sample, missing, total
     #return sample, missing, total
 
-'''
-def squish(file):
-    #condenses diff entries that can be 
-    with open(file) as f:
-        with open(f'{file}squish', 'w') as o:
-
-            prev = None
-            for line in f:
-                if not line.startswith('>'):
-
-                    #process line
-                    line = line.strip().split()
-                    #print(line, prev)
-                    
-                    if prev != None:
-                        #print('line', line)
-                        #print('prev', prev)
-                        if prev[0] == line[0]:
-                            #print('prev', prev, 'line', line)
-                            if int(prev[1]) == int(line[1])-int(prev[2]):
-                                #print('prev', prev, 'now', line)
-                                prev[2] = str(int(prev[2])+int(line[2]))
-                                #print('new prev', prev)
-                            else:
-                                o.write('\t'.join(prev)+'\n') 
-                                prev = line
-                        else:
-                            o.write('\t'.join(prev)+'\n') 
-                            prev = line
-                        
-                    
-                    #the first line of file becomes prev variable 
-                    else:
-                        prev = line
-                        #print('first prev!', prev)
-                        
-                        
-            
-
-                #write header to new file
-                else:
-                    o.write(line)
-                '''
 
 def make_files(lenRow, samps,wd):
     files = {}
@@ -945,16 +591,30 @@ def check_prev_line(prev, line):
     #if prev != None:
     
     print('prev', prev_s, prev_e, 'line', line_s, line_e)
-
     if line_s >= prev_s and line_e <= prev_e:
         overlap = True
         print('Full OVERLAP!!!!!')
+        print('prev', prev_s, prev_e, 'line', line_s, line_e)
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
         overlap = True 
         print('right overlap!!!!!!')
-        print(f'{line_e}-{prev_s}=',line_e-prev_s)
-        #prev[2] = 
-        change = prev
+        print('prev', prev)
+        print('line', line)
+        print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
+        if line_s == prev_e and line[-1]=='1':
+            #print('SNP')
+            overlap = False
+            #change = line
+        elif line_s == prev_e and line[-1]!='1':
+            overlap = True
+            print('need to change this!!!', 'prev', prev, 'line', line)
+            print('prev')
+        else:
+            print('what is happening?')
+            print(f'{line_e}-{prev_s}=',line_e-prev_s)
+            #prev[2] = 
+            #change = prev
+    #elif line_s <= prev_s and line_e >= prev_s:
     print('overlap',overlap, 'change', change)
     return overlap, change
     
@@ -976,11 +636,11 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                 f.write('\t'.join([str(m),str(masks[m])])+'\n')
         
     else:
-        print('no coverage mask file')
+        #print('no coverage mask file')
         masks = mask_TB(tbmf)
 
-    print('masks',len(masks))
-    print('lines', len(lines))
+    #print('masks',len(masks))
+    #print('lines', len(lines))
     masks_key = sorted(masks.keys())
     #ld_keys = sorted(ld_sites.keys())
     masks_ind = 0
@@ -1019,17 +679,17 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             line = lines[lines_ind]
             line_start = int(lines[lines_ind][1])
             line_end = int(lines[lines_ind][1])+int(lines[lines_ind][2])
-            #print('mask_start', mask_start, type(mask_start))
-            #print('mask_end', mask_end, type(mask_end))
-            #print('line',line)
-            #print('line_start', line_start, type(line_start))
-            #print('line end', line_end, type(line_end))
+            print('mask_start', mask_start, type(mask_start))
+            print('mask_end', mask_end, type(mask_end))
+            print('line',line)
+            print('line_start', line_start, type(line_start))
+            print('line end', line_end, type(line_end))
 
             if line_start >= mask_start and line_end <= mask_end:
-                #print('full overlap: line inside')
-                #print('line',line_start, line_end, 'mask', mask_start, mask_end)
-                #print('line', line_start, line_end)
-                #print('mask', mask_start, mask_end)
+                print('full overlap: line inside')
+                print('line',line_start, line_end, 'mask', mask_start, mask_end)
+                print('line', line_start, line_end)
+                print('mask', mask_start, mask_end)
                 
 
                 if prev != None:
@@ -1053,10 +713,10 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
 
             #need to make sure that if snps overlap they get masked
             elif line_start <= mask_start and line_end >= mask_end:
-                #print('full overlap: mask inside')
-                #print('line',line_start, line_end, 'mask', mask_start, mask_end)
-                #print('prev', prev)
-                #print('append?', line)
+                print('full overlap: mask inside')
+                print('line',line_start, line_end, 'mask', mask_start, mask_end)
+                print('prev', prev)
+                print('append?', line)
 
                 if prev != None:
                     overlap,change = check_prev_line(prev, line)
@@ -1081,12 +741,12 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             elif line_start < mask_start:
                 #no overlap, line completely to left
                 if line_end < mask_start:
-                    #print(f'ld{lines_ind} is below tb{masks_ind}')
-                    #print('no overlap')
+                    print(f'ld{lines_ind} is below tb{masks_ind}')
+                    print('no overlap')
                     #print('ld', ld_start, ld_end)
                     #print('tb', tb_start, tb_end)
-                    #print('prev', prev)
-                    #print('append?', line)
+                    print('prev', prev)
+                    print('append?', line)
 
                     if prev != None:
                         overlap,change = check_prev_line(prev, line)
@@ -1105,10 +765,10 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                     lines_ind += 1
                 
                 elif line_end >= mask_start:
-                    #print('left overlap ##########################################')
-                    #print('line',line_start, line_end, 'tb', mask_start, mask_end)
-                    #print(line)
-                    #print('prev', prev)
+                    print('left overlap ##########################################')
+                    print('line',line_start, line_end, 'tb', mask_start, mask_end)
+                    print(line)
+                    print('prev', prev)
                     #print('append?', ['-', str(mask_start), str(line_end)])
 
 
@@ -1119,7 +779,7 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                             #all_sites[change[0]] = change[1]
                     if prev == None or overlap == False:
                     
-                        all_lines.append(['-', str(mask_start), str(line_end)])
+                        all_lines.append(['-', str(line_start), str(mask_end-line_end)])
 
 
                     #if prev != None:
@@ -1133,16 +793,16 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                     #ld_keys_ind += 1
 
             elif line_start > mask_end:
-                #print('no overlap')
+                print('no overlap')
                 #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                #print('line', line_start, line_end)
-                #print('mask', mask_start, mask_end)
-                #print(f'["-", {str(mask_start)}, {str(mask_end-mask_start)}]')
-                #print('prev', prev)
-                #print('append?', ['-', str(mask_start), str(mask_end-mask_start)])
+                print('line', line_start, line_end)
+                print('mask', mask_start, mask_end)
+                print(f'["-", {str(mask_start)}, {str(mask_end-mask_start)}]')
+                print('prev', prev)
+                print('append?', ['-', str(mask_start), str(mask_end-mask_start)])
 
                 if prev != None:
-                    overlap,change = check_prev_line(prev, line)
+                    overlap,change = check_prev_line(prev, ['-',str(mask_start),str(mask_end)])
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
@@ -1159,9 +819,9 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             
             #need to figure out whatn happens if snp is sticking out 
             elif line_start <= mask_end and line_end > mask_end:
-                #print('right over lap ########################################################')
-                #print('ld',line_start, line_end, 'tb', mask_start, mask_end)
-                #print('prev', prev)
+                print('right over lap ########################################################')
+                print('ld',line_start, line_end, 'tb', mask_start, mask_end)
+                print('prev', prev)
                 #print('append?', ['-', str(mask_start), str(line_end-mask_start)])
 
                 if prev != None:
@@ -1224,9 +884,10 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
         #print('len ld', len(ld_keys))
         #print(cont)
         prev = all_lines[-1]
-        if cont == 10000:
-            print(all_lines)
-            break
+        print('prev', prev)
+        #if cont == 100000:
+        #    print(all_lines)
+        #    break
 
     #prev = None
     #for l in all_lines:
@@ -1240,9 +901,11 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
         
         prev = line
         '''
+    #print('all lines', all_lines)
     #with open('diff.diff','w') as d:
     #    for line in all_lines:
     #        d.write('\t'.join(line)+'\n')
+    return all_lines
     
 
 
@@ -1307,7 +970,12 @@ for f in files:
     #print('FILTERING UNIVERSAL SITES ONLY')
     lines = vcf_to_diff(f'{filepath}.filt', f'{wd}{sample}.diff')
     os.system(f'rm {filepath}.filt')
-    mask_and_write_diff(cf,cd,tbmf,lines, samps, sample)
+    all_lines = mask_and_write_diff(cf,cd,tbmf,lines, samps, sample)
+    with open(f'{wd}{sample}.diff','w') as o:
+        for line in all_lines:
+            #print(line)
+            o.write('\t'.join(line)+'\n')
+    #print(lines)
         #squish(f'{wd}{sample}.diff')
         #os.system(f'mv {wd}{sample}.diffsquish {wd}{sample}.diff')
     
@@ -1344,22 +1012,24 @@ for f in files:
 
 #ld = mask_low_depth(cf,cd)
 
+
 '''
 with open('testnewlines','w') as o:
     for line in lines:
         #print(line)
         o.write('\t'.join(line)+'\n')
         #print(line)
-    
-
-all_masks = condense_mask_regions(cf,cd,tbmf)
-print(len(all_masks))
+        
+'''   
+#mask_low_depth(cf,cd)
+#all_masks = condense_mask_regions(cf,cd,tbmf)
+#print(len(all_masks))
 
 #for m in all_masks:
 #    print(m,all_masks[m])
 
 
-
+'''
 prev = None
 for m in all_masks:
     #print(m,all_masks[m])
