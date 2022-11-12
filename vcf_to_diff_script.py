@@ -612,8 +612,10 @@ def check_prev_line(prev, line):
         else:
             print('what is happening?')
             print(f'{line_e}-{prev_s}=',line_e-prev_s)
-            #prev[2] = 
-            #change = prev
+            print('prev', prev)
+            prev[2] = str(int(line[2])-int(prev[1]))
+            print('prev after ', prev)
+            change = prev
     #elif line_s <= prev_s and line_e >= prev_s:
     print('overlap',overlap, 'change', change)
     return overlap, change
@@ -693,7 +695,7 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                 
 
                 if prev != None:
-                    overlap,change = check_prev_line(prev, line)
+                    overlap,change = check_prev_line(prev, ['-', mask_start, mask_end])
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
@@ -752,7 +754,9 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                         overlap,change = check_prev_line(prev, line)
                         if overlap == True and change != None:
                             print('change', change)
-                            #all_sites[change[0]] = change[1]
+                            print('before',all_lines[-1])
+                            all_lines[-1][2] = change[1]
+                            print('after',all_lines[-1])
                     if prev == None or overlap == False:
                     
                         all_lines.append(line)
