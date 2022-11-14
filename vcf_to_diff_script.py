@@ -590,34 +590,36 @@ def check_prev_line(prev, line):
     line_e = line_s + int(line[2])
     #if prev != None:
     
-    print('prev', prev_s, prev_e, 'line', line_s, line_e)
+    #print('prev', prev_s, prev_e, 'line', line_s, line_e)
     if line_s >= prev_s and line_e <= prev_e:
         overlap = True
-        print('Full OVERLAP!!!!!')
-        print('prev', prev_s, prev_e, 'line', line_s, line_e)
+        #print('Full OVERLAP!!!!!')
+        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
         overlap = True 
-        print('right overlap!!!!!!')
-        print('prev', prev)
-        print('line', line)
-        print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
+        #print('right overlap!!!!!!')
+        #print('prev', prev)
+        #print('line', line)
+        #print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
         if line_s == prev_e and line[-1]=='1':
             #print('SNP')
             overlap = False
             #change = line
         elif line_s == prev_e and line[-1]!='1':
             overlap = True
-            print('need to change this!!!', 'prev', prev, 'line', line)
-            print('prev')
+            #print('need to change this!!!', 'prev', prev, 'line', line)
+            #print('prev')
+
+        #might need more conditionals
         else:
-            print('what is happening?')
-            print(f'{line_e}-{prev_s}=',line_e-prev_s)
-            print('prev', prev)
+            #print('what is happening?')
+            #print(f'{line_e}-{prev_s}=',line_e-prev_s)
+            #print('prev', prev)
             prev[2] = str(int(line[2])-int(prev[1]))
-            print('prev after ', prev)
+            #print('prev after ', prev)
             change = prev
     #elif line_s <= prev_s and line_e >= prev_s:
-    print('overlap',overlap, 'change', change)
+    #print('overlap',overlap, 'change', change)
     return overlap, change
     
 
@@ -632,10 +634,10 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
     if cf != None:
         assert len(samps) == 1
         masks = condense_mask_regions(cf,cd,tbmf)
-        with open('masks','w') as f:
+        #with open('masks','w') as f:
 
-            for m in masks:
-                f.write('\t'.join([str(m),str(masks[m])])+'\n')
+        #    for m in masks:
+        #        f.write('\t'.join([str(m),str(masks[m])])+'\n')
         
     else:
         #print('no coverage mask file')
@@ -688,14 +690,15 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             print('line end', line_end, type(line_end))
 
             if line_start >= mask_start and line_end <= mask_end:
-                print('full overlap: line inside')
-                print('line',line_start, line_end, 'mask', mask_start, mask_end)
-                print('line', line_start, line_end)
-                print('mask', mask_start, mask_end)
+                #print('full overlap: line inside')
+                #print('line',line_start, line_end, 'mask', mask_start, mask_end)
+                #print('line', line_start, line_end)
+                #print('mask', mask_start, mask_end)
                 
 
                 if prev != None:
                     overlap,change = check_prev_line(prev, ['-', mask_start, mask_end])
+                    #this conditional probably needs to do something 
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
@@ -715,13 +718,14 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
 
             #need to make sure that if snps overlap they get masked
             elif line_start <= mask_start and line_end >= mask_end:
-                print('full overlap: mask inside')
-                print('line',line_start, line_end, 'mask', mask_start, mask_end)
-                print('prev', prev)
-                print('append?', line)
+                #print('full overlap: mask inside')
+                #print('line',line_start, line_end, 'mask', mask_start, mask_end)
+                #print('prev', prev)
+                #print('append?', line)
 
                 if prev != None:
                     overlap,change = check_prev_line(prev, line)
+                    #this conditional probably needs to do something 
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
@@ -743,20 +747,20 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             elif line_start < mask_start:
                 #no overlap, line completely to left
                 if line_end < mask_start:
-                    print(f'ld{lines_ind} is below tb{masks_ind}')
-                    print('no overlap')
+                    #print(f'ld{lines_ind} is below tb{masks_ind}')
+                    #print('no overlap')
                     #print('ld', ld_start, ld_end)
                     #print('tb', tb_start, tb_end)
-                    print('prev', prev)
-                    print('append?', line)
+                    #print('prev', prev)
+                    #print('append?', line)
 
                     if prev != None:
                         overlap,change = check_prev_line(prev, line)
                         if overlap == True and change != None:
-                            print('change', change)
-                            print('before',all_lines[-1])
+                            #print('change', change)
+                            #print('before',all_lines[-1])
                             all_lines[-1][2] = change[1]
-                            print('after',all_lines[-1])
+                            #print('after',all_lines[-1])
                     if prev == None or overlap == False:
                     
                         all_lines.append(line)
@@ -769,15 +773,16 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                     lines_ind += 1
                 
                 elif line_end >= mask_start:
-                    print('left overlap ##########################################')
-                    print('line',line_start, line_end, 'tb', mask_start, mask_end)
-                    print(line)
-                    print('prev', prev)
+                    #print('left overlap ##########################################')
+                    #print('line',line_start, line_end, 'tb', mask_start, mask_end)
+                    #print(line)
+                    #print('prev', prev)
                     #print('append?', ['-', str(mask_start), str(line_end)])
 
 
                     if prev != None:
                         overlap,change = check_prev_line(prev, line)
+                        #make this conditional do something?
                         if overlap == True and change != None:
                             print('change', change)
                             #all_sites[change[0]] = change[1]
@@ -797,16 +802,17 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
                     #ld_keys_ind += 1
 
             elif line_start > mask_end:
-                print('no overlap')
+                #print('no overlap')
                 #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                print('line', line_start, line_end)
-                print('mask', mask_start, mask_end)
-                print(f'["-", {str(mask_start)}, {str(mask_end-mask_start)}]')
-                print('prev', prev)
-                print('append?', ['-', str(mask_start), str(mask_end-mask_start)])
+                #print('line', line_start, line_end)
+                #print('mask', mask_start, mask_end)
+                #print(f'["-", {str(mask_start)}, {str(mask_end-mask_start)}]')
+                #print('prev', prev)
+                #print('append?', ['-', str(mask_start), str(mask_end-mask_start)])
 
                 if prev != None:
                     overlap,change = check_prev_line(prev, ['-',str(mask_start),str(mask_end)])
+                    #make this do something?
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
@@ -823,13 +829,14 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             
             #need to figure out whatn happens if snp is sticking out 
             elif line_start <= mask_end and line_end > mask_end:
-                print('right over lap ########################################################')
-                print('ld',line_start, line_end, 'tb', mask_start, mask_end)
-                print('prev', prev)
+                #print('right over lap ########################################################')
+                #print('ld',line_start, line_end, 'tb', mask_start, mask_end)
+                #print('prev', prev)
                 #print('append?', ['-', str(mask_start), str(line_end-mask_start)])
 
                 if prev != None:
                     overlap,change = check_prev_line(prev, line)
+                    #do something ?
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
@@ -861,7 +868,7 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
             #print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
         
         elif masks_ind >= len(masks_key) and lines_ind < len(lines):
-            print('no more tb masks, ld only')
+            #print('no more tb masks, ld only')
             line = lines[lines_ind]
             line_start = line[1]
             #ld_end = int(line[2])+int(line[1])
@@ -888,7 +895,7 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
         #print('len ld', len(ld_keys))
         #print(cont)
         prev = all_lines[-1]
-        print('prev', prev)
+        #print('prev', prev)
         #if cont == 100000:
         #    print(all_lines)
         #    break
