@@ -20,7 +20,7 @@ task make_diff {
 		set -eux pipefail
 		mkdir outs
 		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/main/vcf_to_diff_script.py
-		python vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf}
+		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf}
 		>>>
 
 	runtime {
