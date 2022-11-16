@@ -4,7 +4,7 @@ task make_diff {
 	input {
 		File vcf
 		File tbmf
-		Int threads = 5
+		#Int threads = 5 # not currently used
 
 		# runtime attributes
 		Int addldisk = 10
