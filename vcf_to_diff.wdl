@@ -4,7 +4,8 @@ task make_diff {
 	input {
 		File vcf
 		File tbmf
-		#Int threads = 5 # not currently used
+		File cf
+		Int cd = 10
 
 		# runtime attributes
 		Int addldisk = 10
@@ -20,7 +21,7 @@ task make_diff {
 		set -eux pipefail
 		mkdir outs
 		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/main/vcf_to_diff_script.py
-		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf}
+		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{cf} -cd ~{cd}
 		>>>
 
 	runtime {
