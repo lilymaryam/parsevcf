@@ -53,10 +53,6 @@ task make_mask_and_diff {
 	}
 }
 
-
-
-
-
 task make_diff {
 	input {
 		File vcf
