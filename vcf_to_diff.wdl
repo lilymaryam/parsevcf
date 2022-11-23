@@ -9,7 +9,6 @@ task make_mask_and_diff {
 		File bam
 		File vcf
 		File tbmf
-		File cf
 		Int min_coverage
 
 		# runtime attributes
@@ -31,7 +30,7 @@ task make_mask_and_diff {
 		~{basestem}_below_~{min_coverage}x_coverage.bedgraph
 	mkdir outs
 	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/main/vcf_to_diff_script.py
-	python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{cd}
+	python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	>>>
 
 	runtime {
