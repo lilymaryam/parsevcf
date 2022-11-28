@@ -4,10 +4,10 @@ import gzip
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
-parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
-parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
+parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!)')
+parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='mask file of known problematic sites in TB analysis (see github.com/iqbal-lab/eval_wgs_for_public_health/tree/master/masks)')
+parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="mask file of low-coverage sites in VCF (note: can only be used with single-sample vcfs)")
+parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="highpass filter beyond what's in the mask file")
 
 
 args = parser.parse_args()
