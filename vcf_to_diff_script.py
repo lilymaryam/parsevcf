@@ -9,6 +9,7 @@ parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='dir
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 
+
 args = parser.parse_args()
 vcf = args.VCF
 wd = args.working_directory
@@ -16,6 +17,10 @@ tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
 #WARNING: Before running this script, make sure there is enough storage to hold an uncompressed VCF for each sample in the VCF
+#note: this script is assuming use of the HR37v reference genome, if this is not the expected default the script must be modified
+
+#len of HR37v
+len_ref = 4411532
 
 #makes sure input path wont cause error
 if wd[-1] != '/':
@@ -81,7 +86,6 @@ def mask_TB(tbmf):
         for line in file:
             line=line.strip().split()
             tb_sites[int(line[1])+1] = int(line[2])+1
-    print('regions', len(tb_sites))
     return tb_sites
 
 #read coverage file and generate sites to be masked 
@@ -129,8 +133,6 @@ def mask_low_depth(cf, cd):
 #when merging ld and tb masks need to make sure the added masks are not 
 # overlapping existing masks
 def check_prev_mask(prev, line):
-    
-    #may need to change?
     overlap = False
     change = None
     
@@ -605,26 +607,17 @@ def check_prev_line(prev, line):
     #print('overlap',overlap, 'change', change)
     return overlap, change
     
-
+#combine masks and vcf lines into final diff format
 def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
-    #print(cf)
-    #print(cd)
-    #print(tbmf)
-    #print(lines)
-    #print(samps)
-    #print('sample', sample)
-    
+    #if the coverage-file is present (preferred), combine universal mask with coverage mask
     if cf != None:
         assert len(samps) == 1
         masks = condense_mask_regions(cf,cd,tbmf)
-        #with open('masks','w') as f:
-
-        #    for m in masks:
-        #        f.write('\t'.join([str(m),str(masks[m])])+'\n')
         
     else:
         #print('no coverage mask file')
         masks = mask_TB(tbmf)
+
 
     #print('masks',len(masks))
     #print('lines', len(lines))
@@ -900,8 +893,40 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
     #    for line in all_lines:
     #        d.write('\t'.join(line)+'\n')
     return all_lines
-    
 
+#determine if missing samples exceed 5% of genome length
+def missing_check(missing, lenref, cf, cd, tbmask):
+    #how many missing lines ended up in VCF
+    miss_total = 0
+    for line in missing:
+        miss_total += len(line[3])
+
+    ld = mask_low_depth(cf,cd)
+
+    #how many universal mask regions are there
+    mask_count = 0
+    for t in tbmask:
+        mask_count += int(tbmask[t])- int(t)
+
+    eff_lenref = lenref-mask_count
+
+    #how many low depth mask regions are there
+    missing_count = 0
+    for l in ld:
+        missing_count += int(ld[l])-int(l)
+
+    #rules out samples that could never pass quality check no matter what 
+    if missing_count/lenref > .05:
+        return False, missing_count/lenref
+
+    #return all samples that couldn't fail quality check no matter what 
+    elif (missing_count + miss_total)/eff_lenref <= .05:
+        return True, missing_count/lenref
+
+    #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
+    else:
+        print('need to make a cntingency for this?')
+        return True, missing_count/lenref
 
 
 
@@ -950,16 +975,25 @@ for f in files:
     lines, missing = vcf_to_diff(f'{filepath}.filt')
     os.system(f'rm {filepath}.filt')
     #START HERE ON WED
+    #print('missing', missing)
 
-    #make function for counting missing
-    
-    
-    all_lines = mask_and_write_diff(cf,cd,tbmf,lines, samps, sample)
-    
-    with open(f'{wd}{sample}.diff','w') as o:
-        for line in all_lines:
-            #print(line)
-            o.write('\t'.join(line)+'\n')
+    #function for sample quality check: if coverage depth < cd for more than 5% of genome 
+    #need to determine if heuristic is reasonaable and comprehensive
+    make_diff, error = missing_check(missing, len_ref, cf, cd, masks)
+
+    #if sample fails quality check write to .txt instead of diff
+    if make_diff == False:
+        with open(f'{wd}{sample}.txt','w') as o:
+            o.write(f'{sample} rejected due to {error} of genome having coverage below {cd}x\n')
+
+    #if sample passes quality check, run through masking function
+    else:
+        all_lines = mask_and_write_diff(cf,cd,tbmf,lines, samps, sample)
+        with open(f'{wd}{sample}.diff','w') as o:
+            for line in all_lines:
+                #print(line)
+                o.write('\t'.join(line)+'\n')
+                
 
 
 
