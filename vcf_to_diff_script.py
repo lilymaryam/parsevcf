@@ -157,9 +157,9 @@ def check_prev_mask(prev, line):
     return overlap, change
 
 
-def condense_mask_regions(cf,cd,tbmf):
-    ld_sites = mask_low_depth(cf, cd)
-    tb_sites = mask_TB(tbmf)
+def condense_mask_regions(ld_sites,tb_sites):
+    #ld_sites = mask_low_depth(cf, cd)
+    #tb_sites = mask_TB(tbmf)
     tb_keys = sorted(tb_sites.keys())
     ld_keys = sorted(ld_sites.keys())
     all_sites = {}
@@ -623,7 +623,7 @@ def check_prev_line(prev, line):
     return overlap, change
     
 
-def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
+def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
     #print(cf)
     #print(cd)
     #print(tbmf)
@@ -633,15 +633,15 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
     
     if cf != None:
         assert len(samps) == 1
-        masks = condense_mask_regions(cf,cd,tbmf)
-        with open('masks','w') as f:
+        masks = condense_mask_regions(ld,tb_masks)
+        #with open('masks','w') as f:
 
-            for m in masks:
-                f.write('\t'.join([str(m),str(masks[m])])+'\n')
+        #    for m in masks:
+        #        f.write('\t'.join([str(m),str(masks[m])])+'\n')
         
     else:
         #print('no coverage mask file')
-        masks = mask_TB(tbmf)
+        masks = tb_masks
 
     #print('masks',len(masks))
     #print('lines', len(lines))
@@ -917,10 +917,52 @@ def mask_and_write_diff(cf, cd, tbmf, lines, samps, sample):
     #    for line in all_lines:
     #        d.write('\t'.join(line)+'\n')
     return all_lines
+
+#determine if low-coverage samples exceed 5% of genome length
+#note: future iterations of this software may include missing sites in VCF but that is not currently included
+#note: future iterations of this software may determine if universal mask sites overlap with low-coverage sites 
+# but that is not currently included
+def missing_check(lenref, ld, cc):
+
+    #NOT CURRENTLY NEEDED 
+    #how many missing lines ended up in VCF
+    #miss_total = 0
+    #for line in missing:
+    #    miss_total += len(line[3])
+
+    #calculate in main part of script?
+    #ld = mask_low_depth(cf,cd)
+
+    #NOT CURRENTLY NECESSARY
+    #how many universal mask regions are there
+    #mask_count = 0
+    #for t in tbmask:
+    #    mask_count += int(tbmask[t])- int(t)
+
+    #len of genome after universal masks are excluded
+    #eff_lenref = lenref-mask_count
+
+
+    #how many low depth mask regions are there
+    missing_count = 0
+    for l in ld:
+        missing_count += int(ld[l])-int(l)
+
+
+    #rules out samples that could never pass quality check no matter what 
+    if missing_count/lenref > cc:
+        print('fail')
+        return False, missing_count/lenref
+
+    #return all samples that couldn't fail quality check no matter what 
+    #elif (missing_count + miss_total)/eff_lenref <= cc:
+    #    return True, missing_count/lenref
+
+    #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
+    else:
+        print('pass')
+        return True, missing_count/lenref
     
-
-
-
 
 #SCRIPT STARTS HERE
 
@@ -953,26 +995,11 @@ masks = mask_TB(tbmf)
 
 for f in files:
     files[f].close()
-    #print(f, files[f])
-    
+    ld = mask_low_depth(cf,cd)
     sample = os.path.basename(files[f].name)[:-4]
     filepath = files[f].name
-    #print('sample', sample)
-    #print('filepath', filepath)
-
-    
-    #note: theres no point to do this since the files are already completely filling the space
-    #    os.system(f'bgzip -f {filepath}')
-    #    os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}.gz")
-    #    os.system(f"rm {filepath}.gz")
-    
-    
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
-    
-    #note: theres no point to do this since the files are already completely filling the space
-    #os.system(f'bgzip -f {filepath}.filt')
-    #vcf_to_diff(f'{filepath}.filt.gz', f'{wd}{sample}.diff')
 
     #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
     #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
@@ -981,7 +1008,7 @@ for f in files:
     #print('FILTERING UNIVERSAL SITES ONLY')
     lines = vcf_to_diff(f'{filepath}.filt', f'{wd}{sample}.diff')
     os.system(f'rm {filepath}.filt')
-    all_lines = mask_and_write_diff(cf,cd,tbmf,lines, samps, sample)
+    all_lines = mask_and_write_diff(ld, masks,lines, samps, sample)
     with open(f'{wd}{sample}.diff','w') as o:
         for line in all_lines:
             #print(line)
@@ -1018,40 +1045,11 @@ for f in files:
 #SCRIPT ENDS HERE
 
 
+  
 
 
 
-#ld = mask_low_depth(cf,cd)
 
-
-'''
-with open('testnewlines','w') as o:
-    for line in lines:
-        #print(line)
-        o.write('\t'.join(line)+'\n')
-        #print(line)
-        
-'''   
-#mask_low_depth(cf,cd)
-#all_masks = condense_mask_regions(cf,cd,tbmf)
-#print(len(all_masks))
-
-#for m in all_masks:
-#    print(m,all_masks[m])
-
-
-'''
-prev = None
-for m in all_masks:
-    #print(m,all_masks[m])
-    if prev == None:
-        print('first')
-    else:
-        if m <= prev[1]:
-            print('????', prev, m, all_masks[m])
-    
-    prev = [m, all_masks[m]]
-    '''
     
     
 
