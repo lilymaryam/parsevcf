@@ -16,6 +16,8 @@ tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
 
+len_ref = 4411532
+
 #makes sure input path wont cause error
 if wd[-1] != '/':
     wd = wd+'/'
@@ -361,7 +363,7 @@ def squish(lines):
 
                               
 #option to write output to file
-def vcf_to_diff(vcf_file, output):
+def vcf_to_diff(vcf_file):
     #takes a single sample vcf and converts to diff format 
     lines = []
     with open(vcf_file, 'rt') as v:
@@ -922,7 +924,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
 #note: future iterations of this software may include missing sites in VCF but that is not currently included
 #note: future iterations of this software may determine if universal mask sites overlap with low-coverage sites 
 # but that is not currently included
-def missing_check(lenref, ld, cc):
+def missing_check(lenref, ld):
 
     #NOT CURRENTLY NEEDED 
     #how many missing lines ended up in VCF
@@ -950,18 +952,17 @@ def missing_check(lenref, ld, cc):
 
 
     #rules out samples that could never pass quality check no matter what 
-    if missing_count/lenref > cc:
-        print('fail')
-        return False, missing_count/lenref
+    #if missing_count/lenref > cc:
+    #    print('fail')
+    #    return False, missing_count/lenref
 
     #return all samples that couldn't fail quality check no matter what 
     #elif (missing_count + miss_total)/eff_lenref <= cc:
     #    return True, missing_count/lenref
 
     #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
-    else:
-        print('pass')
-        return True, missing_count/lenref
+    #print('pass')
+    return missing_count/lenref
     
 
 #SCRIPT STARTS HERE
@@ -1000,15 +1001,17 @@ for f in files:
     filepath = files[f].name
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
-
+    error = missing_check(len_ref, ld)
     #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
     #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
 
     #more work on this later 
     #print('FILTERING UNIVERSAL SITES ONLY')
-    lines = vcf_to_diff(f'{filepath}.filt', f'{wd}{sample}.diff')
+    lines = vcf_to_diff(f'{filepath}.filt')
     os.system(f'rm {filepath}.filt')
     all_lines = mask_and_write_diff(ld, masks,lines, samps, sample)
+    with open(f'{wd}{sample}.txt','w') as o:
+        o.write(f'{sample}\t{error}\t{cd}\n')
     with open(f'{wd}{sample}.diff','w') as o:
         for line in all_lines:
             #print(line)
