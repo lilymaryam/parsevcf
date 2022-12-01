@@ -384,12 +384,20 @@ def vcf_to_diff(vcf_file):
                     var = line[-1]
                     
                     if var != '0/0':
+                        genos = var.split('/')
+                        print('genos', genos)
+
                         
                         if var == './.':
                             #print('missing', line)
                             #missing += int(len(line[3]))
                             line[4] = '-'
                             line [-1] = '1'
+
+                        elif genos[0]!= genos[1]:
+                            print('HETERO')
+                        
+                        
 
                         else: 
                             
@@ -874,7 +882,19 @@ def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
             line = lines[lines_ind]
             line_start = line[1]
             #ld_end = int(line[2])+int(line[1])
-            all_lines.append(line)
+
+            if prev != None:
+                    #change here
+                    overlap,change = check_prev_line(prev, line)
+                    if overlap == True and change != None:
+                        #do i need to change this?
+                        print('change!!!!!', change)
+                        #all_lines[change[0]] = change[1]
+            if prev == None or overlap == False:
+                
+                #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])    
+                print('add as is!!!!!!', 'line', line, 'prev', prev )
+                all_lines.append(line)
             #tb_keys_ind += 1
             lines_ind += 1
 
@@ -886,6 +906,22 @@ def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
             mask_end =  masks[mask_start]
             #mask_start = [tb_keys_ind]
             #tb_end = tb_sites[tb_keys[tb_keys_ind]]
+
+            #add this at some point 
+            '''
+            if prev != None:
+                    #change here
+                    overlap,change = check_prev_line(prev, line)
+                    if overlap == True and change != None:
+                        #do i need to change this?
+                        print('change!!!!!', change)
+                        #all_lines[change[0]] = change[1]
+            if prev == None or overlap == False:
+                
+                #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])    
+                print('add as is!!!!!!', 'line', line, 'prev', prev )
+                all_lines.append(line)'''
+
             all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
             #tb_keys_ind += 1
             masks_ind += 1 
