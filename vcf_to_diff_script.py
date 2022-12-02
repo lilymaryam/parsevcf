@@ -382,10 +382,17 @@ def vcf_to_diff(vcf_file):
                     total += int(len(line[3]))
                     line = line.strip().split()
                     var = line[-1]
+                    #print('line[3]', line[3])
+                    if len(line[4].split(','))>1:
+
+                        print('OPTIONS!!!!', line[4].split(','))
+                    alleles = [line[3]] + line[4].split(',')
                     
                     if var != '0/0':
+                        print('line',line)
+                        print('alleles', alleles)
                         genos = var.split('/')
-                        print('genos', genos)
+                        #print('genos', genos)
 
                         
                         if var == './.':
@@ -393,9 +400,54 @@ def vcf_to_diff(vcf_file):
                             #missing += int(len(line[3]))
                             line[4] = '-'
                             line [-1] = '1'
+                            print('missing', line)
 
-                        elif genos[0]!= genos[1]:
+                        #assumes diploid
+                        elif genos[0]!= genos[1] and len(line[3])==1:
+                            IUPAC = {
+                                'R':['A','G'], 
+                                'Y':['C','T'],
+                                'S':['C','G'],
+                                'W':['A','T'],
+                                'K':['G','T'],
+                                'M':['A','C']   
+                                    }
                             print('HETERO')
+                            print(line)
+                            print('genos', genos)
+                            print('alleles', alleles)
+                            vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
+                            print('vars', vars)
+                            if len(vars[0])==len(vars[1])==1:
+                                print('SNP')
+                                for key in IUPAC:
+                                    if IUPAC[key] == vars:
+                                        print('IUPAC key', key)
+                                        #alts = line[4].split(',')
+                                        #alt = alts[int(var)-1]
+                                        line[4] = key
+                                        line[-1] = '1'
+                                        print('line after ', line)
+                                        break
+
+                            #if one of the vars is an indel you should mask        
+                            else:
+                                print('one of alleles is an indel, mask the ref for clarity')
+                                print(line)
+                                line[4] = '-'
+                                line [-1] = '1'
+                                print('after', line)
+                                #var = var.split('/')
+                                #var = var[0]
+                                #alts = line[4].split(',')
+                                #alt = alts[int(var)-1]
+                                #line[4] = alt
+                                #line[-1] = '1'
+
+
+                            
+                            
+                            
                         
                         
 
@@ -1037,12 +1089,12 @@ for f in files:
     filepath = files[f].name
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
+
+    #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
     error = missing_check(len_ref, ld)
+
     #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
     #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
-
-    #more work on this later 
-    #print('FILTERING UNIVERSAL SITES ONLY')
     lines = vcf_to_diff(f'{filepath}.filt')
     os.system(f'rm {filepath}.filt')
     all_lines = mask_and_write_diff(ld, masks,lines, samps, sample)
@@ -1050,35 +1102,11 @@ for f in files:
         o.write(f'{sample}\t{error}\t{cd}\n')
     with open(f'{wd}{sample}.diff','w') as o:
         for line in all_lines:
-            #print(line)
             o.write('\t'.join(line)+'\n')
-    #print(lines)
-        #squish(f'{wd}{sample}.diff')
-        #os.system(f'mv {wd}{sample}.diffsquish {wd}{sample}.diff')
     
-    #figure out how to count missing samples, mask full low coverage regions
-
-    #take out low depth masks see if it works 
-    #else:
-    #    print('FILTERING FOR LOW COVERAGE')
-    #    assert len(samps) == 1, f'must only have one sample for each coverage file'
-    #    lines = vcf_to_diff(f'{filepath}.filt', f'{wd}{sample}.diff')
-    #    os.system(f'rm {filepath}.filt')
-        #squish(f'{wd}{sample}.diff')
-        #os.system(f'mv {wd}{sample}.diffsquish {wd}{sample}.diff')
-        #all_masks = condense_mask_regions(cf,cd,tbmf)
-        #for m in all_masks:
-        #    print(m, all_masks[m])
-        #print(len(all_masks))
-        #mask_LDsites(cf,cd,f'{wd}{sample}.diff',sample)
-        #os.system(f'mv {wd}{sample}.masked.diffsquish {wd}{sample}.diff')
     
 
-    #os.system(f"rm {filepath}.filt")
-    #mask_TBsites(f'{wd}{sample}.diff', tbmf, sample)
-    #squish(f'{wd}{sample}.masked.diff')
-    #os.system(f'mv {wd}{sample}.masked.diffsquish {wd}{sample}.masked.diff')
-    #os.system(f'rm {wd}{sample}.diff')
+   
     
 
 #SCRIPT ENDS HERE
