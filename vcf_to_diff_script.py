@@ -5,7 +5,7 @@ import gzip
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
 parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
+parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='path to universal masking file (make sure this directory will have enough space!!!!)')
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 
@@ -24,8 +24,15 @@ if wd[-1] != '/':
 
 #Functions
 
-#for lines where len(ref)==len(alt), look for snps instead of processing as one large chunk                        
+#                       
 def find_snps(line):
+    '''
+    for lines where len(ref)==len(alt), look for snps instead of processing as one large chunk 
+    args: 
+        line: a list containg the line from the VCF
+    output:
+        lines: a list of lists of lines to be added to the diff file 
+    '''
     ref = line[3]
     alt = line[4]
     end = len(ref)
@@ -40,9 +47,14 @@ def find_snps(line):
 
     return lines
 
-#for lines where len(ref) > 1 AND len(alt) == 1 
-#currently deletions and missing data are all converted to '-'
 def process_dels(line):
+    '''
+    for lines where len(ref) > 1 AND len(alt) == 1 (currently deletions and missing data are all converted to '-')
+    Args: 
+        line: a list containing info from a line of the VCF
+    output:
+        l: a list containing the diff-formatted version of the deletion
+    '''
     ref = line[3]
     alt = line[4]
     end = len(ref)
@@ -63,9 +75,15 @@ def process_dels(line):
     return l
 
 
-#for sitations where reference and alt do not align
-#will mask entire reference 
+
 def process_others(line):
+    '''
+    when reference and alt do not align (are differenct lens), mask entire reference 
+    Args:
+        line: a list containing info from a line of the VCF
+    Input: 
+        l: a list containing the diff-formatted version of the line
+    '''
     ref = line[3]
     alt = line[4]
     end = len(ref)
@@ -76,15 +94,19 @@ def process_others(line):
 
     return l
 
-#read TB mask file (different than coverage file) and generate sites to be masked
-#bed coverage file is 0 indexed, so add 1 to everything 
 def mask_TB(tbmf):
+    '''
+    Opens and reads bed file containing universally ignored TB positions
+    Args:
+        tbmf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
+    Output:
+        tb_sites: dictionary where key is start of masked region (1 index) and value is end of masked region (not inclusive)
+    '''
     tb_sites = {}
     with open(tbmf) as file:
         for line in file:
             line=line.strip().split()
             tb_sites[int(line[1])+1] = int(line[2])+1
-    #print('regions', tb_sites)
     return tb_sites
 
 #read coverage file and generate sites to be masked 
@@ -129,282 +151,293 @@ def mask_low_depth(cf, cd):
     #    print(l, ld_sites[l])
     return ld_sites
 
-#when merging ld and tb masks need to make sure the added masks are not overlapping
+#
 def check_prev_mask(prev, line):
-    #currently not checking overlap to left of prev bc that indicates a bigger error
+    '''
+    when merging ld and tb masks, make sure the masks are not overlapping with previously added masks
+    Args:
+        prev: a list of the start and stop of the previously added mask region 
+        line: a list of the start and stop of the to-be-added mask region
+    Output:
+        overlap: a boolean meant to indicate if prev and line overlap
+        change: a list containing important information for updating the prev value
+    '''
+    #currently not checking overlap to left of prev bc that indicates a bigger error!!!!!!!!
     #may need to change?
     overlap = False
     change = None
-    #print('prev', prev)
-    #print('line', line)
-    #if prev != None:
+    
     prev_s = int(prev[0])
     prev_e = int(prev[1])
     line_s = int(line[0])
     line_e = int(line[1])
-    #if prev != None:
-    #print('prev', prev_s, prev_e, 'line', line_s, line_e)
+
+    #NO OTHER CONDITIONALS NEEDED BC LINE CANT BE TO THE LEFT OF PREV AND IF LINE HAS NO OVERLAP W PREV NO TRACKING IS NEEDED 
+    #add error checking to make sure line isn't to left of prev?
+    
+    #if line is completely contained inside prev
+    #line should not be added to all_sites 
     if line_s >= prev_s and line_e <= prev_e:
-        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
         overlap = True
-        #print('Full OVERLAP!!!!!')
-        #print('overlap',overlap, 'change', change)
+    #if line is overlapping the right end of prev
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
-        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
         overlap = True 
-        #print('right overlap!!!!!!')
+        #update prev 
         prev[1] = line_e
+        #track change 
         change = prev
-        #print('overlap',overlap, 'change', change)
     return overlap, change
 
 
 def condense_mask_regions(ld_sites,tb_sites):
-    #ld_sites = mask_low_depth(cf, cd)
-    #tb_sites = mask_TB(tbmf)
+    '''
+    for instances with low-depth masking, combine low-depth masks and universal masks into a single data structure 
+    Args: 
+        ld_sites: a dictionary containing low-depth sites to be masked
+        tb_sites: a dictionary containing universal masking sites 
+    Output:
+        all_sites: a dictionary containing all masking sites from both universal and low-depth
+    '''
+    #editing thought: would likely benefit from being a list rather than a dictionary 
     tb_keys = sorted(tb_sites.keys())
     ld_keys = sorted(ld_sites.keys())
     all_sites = {}
-    #print('ld',ld_keys)
-    #print('tb',tb_keys)
     tb_keys_ind = 0
     ld_keys_ind = 0
-    cont = 0
+    #track previous line in all_sites 
     prev = None
+    #iterate through tb_keys and ld_keys exactly 1 time, track index of keys as you iterate 
     while tb_keys_ind < len(tb_keys) or ld_keys_ind < len(ld_keys):
-        
-            #print(all_sites_keys[-1])
+        #if still iterating through both lists
         if tb_keys_ind < len(tb_keys) and ld_keys_ind < len(ld_keys): 
             tb_start = tb_keys[tb_keys_ind]
             tb_end =  tb_sites[tb_keys[tb_keys_ind]]
             ld_start = ld_keys[ld_keys_ind]
             ld_end = ld_sites[ld_keys[ld_keys_ind]]
-
+            
             if ld_start < tb_start:
                 if ld_end < tb_start:
-                    #print(f'ld{ld_keys_ind} is below tb{tb_keys_ind}')
-                    #print('ld', ld_start, ld_end)
-                    #print('tb', tb_start, tb_end)
+                    #the low-depth site is completely to the left of the universal site
                     if prev != None:
+                        #before adding to all_sites, make sure it doesn't overlap prev
                         overlap, change = check_prev_mask(prev, [ld_start, ld_end])
+                        #if overlap is detected AND requires prev to be updated
                         if overlap == True and change != None:
-                            #print('change', 'need to update prev!!!!!', change)
-                            #print(f'ld{ld_keys_ind} is below tb{tb_keys_ind}')
-                            #print('ld', ld_start, ld_end)
-                            #print('tb', tb_start, tb_end)
+                            #update prev in all_sites
                             all_sites[change[0]] = change[1]
                     if prev == None or overlap == False:
+                        #add new site to all_sites
                         all_sites[ld_start] = ld_end
+                    #update ld index because site was processed
                     ld_keys_ind += 1
                 elif ld_end >= tb_start:
-                    #print('left overlap')
-                    #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                    #this accounts for ld overlapping tb on the left
                     if prev != None:
+                        #before adding to all_sites, check overlap with prev
                         overlap, change = check_prev_mask(prev, [ld_start, tb_end])
                         if overlap == True and change != None:
-                            #print('prev', prev, 'change', change)
+                            #if new region overlaps, update prev
                             all_sites[change[0]] = change[1]
+                    #if there is no overlap, add new region to all_sites
                     if prev == None or overlap == False:
-                        #if prev == None:
-                        #    print('first')
-                        #elif overlap == False:
-                        #    print('overlap = ', overlap)
                         all_sites[ld_start] = tb_end
+                    #since both regions are added at the same time, update index for both lists
                     tb_keys_ind += 1
                     ld_keys_ind += 1
             
             elif ld_start <= tb_end and ld_end > tb_end:
-                #print('right over lap')
-                #print('left overlap')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                #if ld overlaps tb on the right
                 if prev != None:
+                    #before adding to all_sites, make sure it doesn't overlap prev
                     overlap,change = check_prev_mask(prev, [tb_start, ld_end])
                     if overlap == True and change != None:
-                        #print('change', change)
                         all_sites[change[0]] = change[1]
                 if prev == None or overlap == False:
+                    #if there is no overlap, add new region to all_sites
                     all_sites[tb_start] = ld_end
+                #update both indices when there is overlap
                 tb_keys_ind += 1
                 ld_keys_ind += 1
 
             elif ld_start > tb_end:
-                #print('no overlap')
-                #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
+                #if there is no overlap between ld and tb, and ld is on the right
                 if prev != None:
+                    #check overlap of tb before adding to prev
                     overlap,change = check_prev_mask(prev, [tb_start, tb_end])
                     if overlap == True and change != None:
-                        #print('change', change)
-                        #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                        #print('ld', ld_start, ld_end)
-                        #print('tb', tb_start, tb_end)
+                        #if there is overlap, update prev 
                         all_sites[change[0]] = change[1]
+                # if there is no overlap, add tb to all_sites
                 if prev == None or overlap == False:
                     all_sites[tb_start] = tb_end
                 tb_keys_ind += 1
 
             elif ld_start >= tb_start and ld_end <= tb_end:
-                #print('full overlap: ld inside')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
+                # if tb and ld fully overlap with ld inside
                 if prev != None:
+                    #make sure tb doesnt overlap prev 
                     overlap,change = check_prev_mask(prev, [tb_start, tb_end])
                     if overlap == True and change != False:
-                        #print('change', change)
                         all_sites[change[0]] = change[1]
+                #if no overlap, add tb to all_sites
                 if prev == None or overlap == False:
                     all_sites[tb_start] = tb_end
+                #update both indices 
                 tb_keys_ind += 1
                 ld_keys_ind += 1
 
             
             elif ld_start <= tb_start and ld_end >= tb_end:
-                #print('full overlap: tb inside')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                #if ld and tb fully overlap with tb inside
                 if prev != None:
+                    #make sure ld doesnt overlap prev
                     overlap,change = check_prev_mask(prev, [ld_start, ld_end])
                     if overlap == True and change != None:
-                        #print('change', change)
                         all_sites[change[0]] = change[1]
+                #if no overlap, add ld to all_sites
                 if prev == None or overlap == False:
                     all_sites[ld_start] = ld_end
+                #update both indices
                 tb_keys_ind += 1
                 ld_keys_ind += 1
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
 
-            #else:
-                #print('other', 'what else could happen?')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
-                #all_sites[tb_start]
-
-
-                #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
-            #print('tb',tb_keys[tb_keys_ind], tb_sites[tb_keys[tb_keys_ind]])
+            #covered all 6 possible positions of the two regions
             #print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+
+        #possible bug: prev overlaps with one list the first time the other list expires
         elif tb_keys_ind >= len(tb_keys) and ld_keys_ind < len(ld_keys):
-            #print('no more tb masks, ld only')
+            #if reach end of tb_masks process ld only
             ld_start = ld_keys[ld_keys_ind]
             ld_end = ld_sites[ld_keys[ld_keys_ind]]
             all_sites[ld_start] = ld_end
-            #tb_keys_ind += 1
             ld_keys_ind += 1
 
-
+        #possible bug: prev overlaps with one list the first time the other list expires
         elif ld_keys_ind >= len(ld_keys) and tb_keys_ind < len(tb_keys):
-            #print('no more ld masks, tb only')
+            #if reach end of ld masks process tb only
             tb_start = tb_keys[tb_keys_ind]
             tb_end = tb_sites[tb_keys[tb_keys_ind]]
             all_sites[tb_start] = tb_end
-            #tb_keys_ind += 1
             tb_keys_ind += 1 
 
-        cont += 1
-        #print('tb ind', tb_keys_ind)
-        #print('ld ind', ld_keys_ind)
-        #print('len tb', len(tb_keys))
-        #print('len ld', len(ld_keys))
-        #if cont == 10000:
-        #    print(all_sites)
-        #    break
-        #prev = 
+        #keep all_sites sorted 
         if len(all_sites) > 0:
             all_sites_keys = sorted(all_sites.keys())
+        #track previous for every iteration
         prev = [all_sites_keys[-1],all_sites[all_sites_keys[-1]]]
     return all_sites
                     
 def squish(lines):
-    #condenses diff lines that can be compressed into a single line
-    #print('SQUISH')
+    '''
+    condenses diff lines that can be compressed into a single line
+    Args:
+        lines: a list of diff-formatted lines each stored as a list
+    Outputs:
+        newlines: a list of diff-formatted lines after compression
+    '''
+    #track previous line in lines
     prev = None
+    #create a new list of lines for after compression
     newLines = []
     for line in lines:
-        #print(line)
+        #skip header
         if not line[0].startswith('>'):
+            #if not the first line in the file
             if prev != None:
-                #print('line', line)
-                #print('prev', prev)
+                #if prev and line have the same nucleotide
                 if prev[0] == line[0]:
-                    
+                    #if end of prev overlaps w beginning of line
                     if int(prev[1]) == int(line[1])-int(prev[2]):
-                        #print('squish', 'prev', prev, 'line', line)
-                        #print('prev', prev, 'now', line)
+                        #rewrite prev and line into a new prev
                         prev[2] = str(int(prev[2])+int(line[2]))
-                        #print('new prev', prev)
                     else:
-                        #o.write('\t'.join(prev)+'\n')
+                        #if prev and line don't overlap, add prev to newLines and update prev
                         newLines.append(prev) 
                         prev = line
                 else:
-                    #o.write('\t'.join(prev)+'\n')
+                    #if prev and line don't overlap, add prev to newLines and update prev
                     newLines.append(prev) 
-                    prev = line
-                    
-                
-            
+                    prev = line     
             #the first line of file becomes prev variable 
             else:
-                
-                #print('first prev!', prev)
-                #newLines.append(line)
                 prev = line
         #write header to new file
         else:
             newLines.append(line)
-            #print(line)
-            #o.write(line) 
+    #add last prev to end of newLines
     if prev != None:
         newLines.append(prev)  
+    else:
+        #prev should probably not be None
+        print('no lines in file?')
+    #should i overwrite lines variable for storage consideration?
     return newLines
 
                               
-#option to write output to file
 def vcf_to_diff(vcf_file):
-    #takes a single sample vcf and converts to diff format 
+    '''
+    takes a single sample vcf and converts to diff format
+    NOTE: this function makes the assumption that incoming diff file is genotyped as diploid
+    Args: 
+        vcf_file: uncompressed single sample vcf 
+    Outputs:
+        newlines: a list of diff-formatted lines for the file
+    ''' 
     lines = []
+    #missing = 0
     with open(vcf_file, 'rt') as v:
-        #with open(output, 'w') as o:
-        missing = 0
-        total = 0
         for line in v:
+            #ignore header lines
             if not line.startswith('##'):
+                #find column names
                 if line.startswith('#'):
                     line = line.strip().split()
+                    #last column name is single-sample vcf will be sample name
                     sample = line[-1]
-                    #print('sample', sample)
-                    #o.write(f'>{sample}\n')
+                    #make diff file header
                     lines.append([f'>{sample}'])
+                #all position lines
                 else:
-                    total += int(len(line[3]))
                     line = line.strip().split()
+                    #genotype
                     var = line[-1]
-                    #print('line[3]', line[3])
-                    if len(line[4].split(','))>1:
 
+                    # for all lines with multiple alt alleles
+                    if len(line[4].split(','))>1:
                         print('OPTIONS!!!!', line[4].split(','))
+
+                    #combine ref allele and alt alleles
                     alleles = [line[3]] + line[4].split(',')
                     
+                    #if genotype is not reference allele
                     if var != '0/0':
                         print('line',line)
                         print('alleles', alleles)
-                        genos = var.split('/')
-                        #print('genos', genos)
 
+                        #split genotype to check for heterozygosity
+                        genos = var.split('/')
                         
                         if var == './.':
-                            #print('missing', line)
+                            #potentially useful to track number of positions with missing info 
                             #missing += int(len(line[3]))
+                            #print('missing', line)
                             line[4] = '-'
                             line [-1] = '1'
-                            print('missing', line)
-
-                        #assumes diploid
+                            
+                        #assumes diploid genotype
+                        #if genotype is heterozygous and reference position is not and indel
+                        #NOTE: may need to change this later when indels are not ignored by usher 
                         elif genos[0]!= genos[1] and len(line[3])==1:
-                            IUPAC = {
+                            print('HETERO', line)
+                            print('genos', genos)
+                            print('alleles', alleles)
+                            #generated sorted list of both alleles genotyped 
+                            vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
+                            print('vars', vars)
+                            #if the heterozygous position is a SNP, replace with an IUPAC symbol
+                            if len(vars[0])==len(vars[1])==1:
+                                print('SNP')
+                                IUPAC = {
                                 'R':['A','G'], 
                                 'Y':['C','T'],
                                 'S':['C','G'],
@@ -412,25 +445,15 @@ def vcf_to_diff(vcf_file):
                                 'K':['G','T'],
                                 'M':['A','C']   
                                     }
-                            print('HETERO')
-                            print(line)
-                            print('genos', genos)
-                            print('alleles', alleles)
-                            vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
-                            print('vars', vars)
-                            if len(vars[0])==len(vars[1])==1:
-                                print('SNP')
                                 for key in IUPAC:
                                     if IUPAC[key] == vars:
                                         print('IUPAC key', key)
-                                        #alts = line[4].split(',')
-                                        #alt = alts[int(var)-1]
                                         line[4] = key
                                         line[-1] = '1'
                                         print('line after ', line)
                                         break
 
-                            #if one of the vars is an indel you should mask        
+                            #if one of the vars is an indel, mask the position     
                             else:
                                 print('one of alleles is an indel, mask the ref for clarity')
                                 print(line)
@@ -444,15 +467,8 @@ def vcf_to_diff(vcf_file):
                                 #line[4] = alt
                                 #line[-1] = '1'
 
-
-                            
-                            
-                            
-                        
-                        
-
+                        #if reference is an indel and/or genotype is homozygous   
                         else: 
-                            
                             var = var.split('/')
                             var = var[0]
                             alts = line[4].split(',')
@@ -460,216 +476,236 @@ def vcf_to_diff(vcf_file):
                             line[4] = alt
                             line[-1] = '1'
 
-                        #print('line', line)
+                        #after above processing there should only be a string with one alt allele
                         assert type(line[4]) == str
+
+                        #if len of ref position and len of alt are both one, process as a SNP
                         if len(line[3]) == 1:
-
                             if len(line[4]) == 1:
-                                #print(line)
-                                #o.write('\t'.join([line[4],line[1], '1'])+'\n')
                                 lines.append([line[4],line[1], '1'])
-                            #elif len(line[4]) > 1:
-                                #print('insertion')
-
-
+                            #if len(line[4]) > 1, the position is an insertion which will not be included in the file
+                        
                         elif len(line[3]) > 1:
                             if len(line[4]) == len(line[3]):
-                                #print(line)
+                                #if the ref and alt are both longer than 1 but equal to each other,
+                                #search through alt for snps
                                 newlines = find_snps(line)
                                 for n in newlines:
-                                    #o.write('\t'.join(n)+'\n')
                                     lines.append(n)
 
                             elif len(line[4]) == 1:
-                                #print('deletion')
+                                #if ref is >1 and alt=1, process line as a simple deletion 
                                 newline = process_dels(line)
-                                #print(newline)
-                                #o.write('\t'.join(newline)+'\n')
                                 lines.append(newline)
 
                             else:
+                                #if len(ref) and len(alt) are both greater than 1 but not the same len as each other
                                 newline = process_others(line)
-                                #o.write('\t'.join(newline)+'\n')
                                 lines.append(newline)
-    #figure out how to count missing data and add stats here 
-    #with open('testlines','w') as o:
-    #    for line in lines:
-    #        o.write('\t'.join(line)+'\n')
+    #compress adjacent diff lines where possible 
     newLines = squish(lines)
     return newLines
 
-                                    #print('indel', line)
-                                #print(line)
-            #print('missing', missing, 'total', total)
-
-    #return sample, missing, total
-    #return sample, missing, total
-
-
-def make_files(lenRow, samps,wd):
+def make_files(samps,wd):
+    '''
+    Initializes and opens VCF file for each sample in the VCF (will create smaller VCFs for multi-sample VCFs 
+    and create a separate editable temp VCF from the original input)
+    Args: 
+        samps: a list of sample names
+        wd: a working directory where all files should be created *make sure directory contains enough space for all uncompressed 
+        sampleVCFs 
+    outputs:
+        files: a dictionary that has the column number as key and the VCF filepath as the value
+    '''
     files = {}
     for i in range(len(samps)):
-        #print(i)
         s = samps[i]
-        #print(s)
+        #replace '/' in sample name with '-'
         if '/' not in s:
             file = open(f'{wd}{s}.vcf','w')
         else:
             newname = s.replace('/', '-')
-            #print(newname)
             file = open(f'{wd}{newname}.vcf','w')
-        #files.append(file)
         files[i+9] = file
-        #print(files)
     return files
 
                             
 def count_samples(vcf):
-    #open file to indentify number of samples 
+    '''
+    opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
+    *note that VCF is 1-indexed and will remain as such
+
+    args: 
+        vcf: uncompressed VCF containing >=1 samples
+
+    returns:
+        lenRow: an int that determines number of columns in VCF (including metadata)
+        samps: a list of sample names from the VCF
+    '''
     with open(vcf, 'r') as v:
         for line in v:
             #if the line is not part of the heading
             if not line.startswith('##'):
-
                 #if the line contains the column names 
                 #note that this assumes 9 meta data columns, if you need to account for more/less change this 
                 if line.startswith('#'):
                     line = line.strip().split('\t')
                     samps = line[9:]
                     lenRow = len(line)
-
-                    #this is the 1-indexed indices for each row of the file, we will keep these values as they can be 
-                    # traced from the largest vcf to the subvcfs to make sure all of the info is consistent
-                    #print('lenRow',lenRow)
                     break
     
     return lenRow, samps                           
 
 
 def count_samples_bin(vcf):
-    #open file to indentify number of samples 
+    '''
+    opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
+    *note that VCF is 1-indexed and will remain as such
+
+    args: 
+        vcf: compressed VCF containing >=1 samples
+
+    returns:
+        lenRow: an int that determines number of columns in VCF (including metadata)
+        samps: a list of sample names from the VCF
+    '''
     with gzip.open(vcf, 'rt') as v:
         for line in v:
             #if the line is not part of the heading
             if not line.startswith('##'):
-
                 #if the line contains the column names 
                 #note that this assumes 9 meta data columns, if you need to account for more/less change this 
                 if line.startswith('#'):
                     line = line.strip().split('\t')
                     samps = line[9:]
                     lenRow = len(line)
-
-                    #this is the 1-indexed indices for each row of the file, we will keep these values as they can be 
-                    # traced from the largest vcf to the subvcfs to make sure all of the info is consistent
-                    #print('lenRow',lenRow)
                     break
     
     return lenRow, samps
 
 def read_VCF(vcf, files):
-    #count = 0 
+    '''
+    open uncompressed VCF and separate columns into individual sample VCFs 
+    *note slightly redundant if VCF only contains one sample but allows for editing of VCF wo changing 
+    original file
+    Args:
+        vcf: uncompressed VCF 
+        files: dictionary of VCF files to fill in with VCF info
+    Outputs:
+        none
+    '''
     with open(vcf) as v:
         for line in v:
+            #for lines not in heading
             if not line.startswith('##'):
                 line = line.strip().split()
+                #position data for all samples
                 position = line[0:9] 
-                #print('position', position)
-                #print(len(line))
-                #count = 1
                 for f in files:
-                    #print('f',f)
-                    #print(files[f])
-                    #count += 1
+                    #sample specific data
                     parcel = [line[f]]
-                    #print('parcel',parcel)
-                    #print(parcel)
                     newline = position+parcel
-                    #print(newline)
-                    #print(len(newline))
+                    #write position and sample data to file in VCF format 
                     files[f].write('\t'.join(newline)+'\n')
-                    #print(position[1],f,files[f][0])
-                    #print(f)
-                    
-                #count += 1
-
-            
                 
-            
+            #write heading to new VCF file 
             else:
-                #print(line)
                 for f in files:
                     files[f].write(line)
 
 def read_VCF_bin(vcf, files):
-    #count = 0 
+    '''
+    open compressed VCF and separate columns into individual sample VCFs 
+    *note: only reads file once regardless of number of samples
+    *note slightly redundant if VCF only contains one sample but allows for editing of VCF wo changing 
+    original file
+    Args:
+        vcf: compressed VCF 
+        files: dictionary of VCF files to fill in with VCF info
+    Outputs:
+        none
+    '''
     with gzip.open(vcf, 'rt') as v:
         for line in v:
+            #for lines not in heading
             if not line.startswith('##'):
                 line = line.strip().split()
+                #position data for all samples
                 position = line[0:9] 
-                #print('position', position)
-                #print(len(line))
-                #count = 1
                 for f in files:
-                    #print('f',f)
-                    #print(files[f])
-                    #count += 1
+                    #sample specific data
                     parcel = [line[f]]
-                    #print('parcel',parcel)
-                    #print(parcel)
                     newline = position+parcel
-                    #print(newline)
-                    #print(len(newline))
+                    #write position and sample data to file in VCF format 
                     files[f].write('\t'.join(newline)+'\n')
-                    #print(position[1],f,files[f][0])
-                    #print(f)
-                    
-                #count += 1
-
-            
-                
             
             else:
-                #print(line)
                 for f in files:
                     files[f].write(line)
 
-    #else:
-    #    print('prev', prev, 'line', line_s, line_e)
-
 def check_prev_line(prev, line):
-    #currently not checking overlap to left of prev bc that indicates a bigger error
-    #may need to change?
+    '''
+    when merging lines and masks, make sure all newly added lines are not overlapping with previously added ones
+    Args:
+        prev: a list containing the most recent added line to all_lines
+        line: a list containing the line to be added next to all_lines
+    Outputs:
+        overlap: a boolean meant to indicate if prev and line overlap
+        change: a list containing important information for updating the prev value
+    '''
+    # NOTE currently not checking overlap to left of prev bc that indicates a bigger error
     overlap = False
     change = None
-    print('prev', prev)
-    print('check this line!!!', line)
-    #if prev != None:
+    new_line = None
+
     prev_s = int(prev[1])
     prev_e = prev_s + int(prev[2])
     line_s = int(line[1])
     line_e = line_s + int(line[2])
-    #if prev != None:
     
+    '''
+    DEBUG PRINTS
+    print('prev', prev)
+    print('line', line)
     print('prev', prev_s, prev_e, 'line', line_s, line_e)
-    if line_s >= prev_s and line_e <= prev_e:
+    '''
+    if line_s == prev_e:
+        overlap = False
+    elif line_s >= prev_s and line_e <= prev_e:
+        #prev fully overlaps line
         overlap = True
-        print('Full OVERLAP!!!!!')
-        print('prev', prev_s, prev_e, 'line', line_s, line_e)
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
+        #line overlaps right end of prev
         overlap = True 
-        print('right overlap!!!!!!')
-        print('prev', prev)
-        print('line', line)
-        print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
-        if line_s == prev_e and line[-1]=='1':
-            #print('SNP')
-            overlap = False
-            #change = line
-        elif line_s == prev_e and line[-1]!='1':
+        print('right side overlap','prev', prev, 'line', line)
+        if prev[0] == line[0]:
+            print('add em', 'prev', prev, 'line', line)
+            print('should be?',f'{line_e}-{prev_s}=',line_e-prev_s)
+            print('prev before', prev)
+            #prev[2] = str(int(line[2])-int(prev[1]))
+            prev[2] = str(line_e-prev_s)
+            print('prev after ', prev)
+            change = prev
+        
+        else:
+            print('need another line?', 'prev', prev, 'line', line)
+            if prev[0] == '-':
+                print('prev mask', 'prev', prev_s, prev_e, 'line', line_s, line_e)
+                new_line = [line[0], str(prev_e), str(line_e-prev_e)]
+            elif line[0] == '-':
+                #need to check this for errors
+                print('line mask', 'prev', prev_s, prev_e, 'line', line_s, line_e)
+                prev[2] = str(line_s-prev_s) 
+                change = prev
+                new_line = [line[0], str(line_s), str(line_e)]
+            else:
+                print('no mask', 'prev', prev_s, prev_e, 'line', line_s, line_e)
+                print('this should not happen, check data')
+            #new_line
+        '''
+        if line_s == prev_e-1 and line[-1]!='1':
             overlap = True
-            print('need to change this!!!', 'prev', prev, 'line', line)
+            print('need to change this!!! is it working?, actual', 'prev', prev, 'line', line)
             print('prev')
         else:
             print('what is happening?')
@@ -680,86 +716,66 @@ def check_prev_line(prev, line):
             prev[2] = str(line_e-prev_s)
             print('prev after ', prev)
             change = prev
+            '''
     #elif line_s <= prev_s and line_e >= prev_s:
-    print('overlap',overlap, 'change', change)
+    if change!= None or new_line!= None: 
+        print('check prev res: overlap',overlap, 'change', change, 'newline', new_line)
     return overlap, change
     
 
-def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
-    #print(cf)
-    #print(cd)
-    #print(tbmf)
-    #print(lines)
-    #print(samps)
-    #print('sample', sample)
-    
-    if cf != None:
+def mask_and_write_diff(ld, tb_masks, lines, samps):
+    '''
+    iterate through masking regions and lines of diff file to mask positions
+    args:
+        ld: a dictionary of low depth coverage regions 
+        tb_masks: a dictionary of universally masked regions
+        lines: a list of diff-formatted lines 
+        samps: a list of sample names from the VCF
+    output:
+        all_lines: a list of diff-formatted lines including all of the masked regions
+    '''
+    #NOTE IF USED WITH MULTISAMPLE VCF, NO DEPTH MASKING WILL BE DONE
+    if ld != None:
         assert len(samps) == 1
         masks = condense_mask_regions(ld,tb_masks)
-        #with open('masks','w') as f:
-
-        #    for m in masks:
-        #        f.write('\t'.join([str(m),str(masks[m])])+'\n')
         
     else:
-        #print('no coverage mask file')
         masks = tb_masks
 
-    #print('masks',len(masks))
-    #print('lines', len(lines))
     masks_key = sorted(masks.keys())
-    #ld_keys = sorted(ld_sites.keys())
+    
+
+    # iterate through all masks and lines one time and combine things as needed 
     masks_ind = 0
+
+    #skip header in lines
     lines_ind = 1
-
-
-    '''
-    prev = None
-    for line in lines:
-        if len(line) == 1:
-            print(line)
-        else:
-            print('prev', prev)
-            if prev != None:
-                if int(line[1]) <= prev:
-                    print('OUT OF ORDER ################################')
-                else:
-                    print('prev', prev)
-                    print('line',line)
-                    #pass
-            
-            prev = int(line[1])
-            '''
     all_lines = [lines[0]]
-    cont = 0
+    
+    #cont = 0
     prev = None
     while masks_ind < len(masks_key) or lines_ind < len(lines):
-        #print('prv', prev)
-        #if len(all_lines) > 1:
-        #    all_lines_keys = sorted(all_lines.keys())
-        
-        #if both indexes are still going
+        #if both indices are still going
         if masks_ind < len(masks_key) and lines_ind < len(lines): 
             mask_start = masks_key[masks_ind]
             mask_end =  masks[mask_start]
             line = lines[lines_ind]
             line_start = int(lines[lines_ind][1])
             line_end = int(lines[lines_ind][1])+int(lines[lines_ind][2])
+
+            '''
+            DEBUG PRINTS
             print('mask_start', mask_start, type(mask_start))
             print('mask_end', mask_end, type(mask_end))
             print('line',line)
             print('line_start', line_start, type(line_start))
             print('line end', line_end, type(line_end))
+            '''
 
             if line_start >= mask_start and line_end <= mask_end:
-                print('full overlap: line inside')
-                print('line',line_start, line_end, 'mask', mask_start, mask_end)
-                print('line', line_start, line_end)
-                print('mask', mask_start, mask_end)
-                
-
+                #line and mask fully overlap with line inside
                 if prev != None:
-                    #change here
+                    #before adding mask to all_lines, make sure it doesnt overlap with prev
                     overlap,change = check_prev_line(prev, ['-', mask_start, mask_end-mask_start])
                     if overlap == True and change != None:
                         print('change', change)
@@ -978,7 +994,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
             #tb_keys_ind += 1
             masks_ind += 1 
         
-        cont += 1
+        #cont += 1
         #print('tb ind', tb_keys_ind)
         #print('ld ind', ld_keys_ind)
         #print('len tb', len(tb_keys))
@@ -1013,6 +1029,15 @@ def mask_and_write_diff(ld, tb_masks, lines, samps, sample):
 #note: future iterations of this software may determine if universal mask sites overlap with low-coverage sites 
 # but that is not currently included
 def missing_check(lenref, ld):
+    '''
+    determine the percentage of the genome that is considered 'low coverage' based on the coverage depth arg
+
+    Args:
+        lenref: len of reference genome
+        ld: dictionary containing the regions of seqeunce that are below the cd threshold
+    Outputs: 
+        missing_count/lenref: percentage of genome that is considered low-depth 
+    '''
 
     #NOT CURRENTLY NEEDED 
     #how many missing lines ended up in VCF
@@ -1044,49 +1069,55 @@ def missing_check(lenref, ld):
     #    print('fail')
     #    return False, missing_count/lenref
 
-    #return all samples that couldn't fail quality check no matter what 
-    #elif (missing_count + miss_total)/eff_lenref <= cc:
-    #    return True, missing_count/lenref
-
-    #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
-    #print('pass')
     return missing_count/lenref
     
 
 #SCRIPT STARTS HERE
 
+#determine if vcf is compressed
 binary = True
 with gzip.open(vcf, 'r') as test:
     try:
         test.read(1)
     except OSError:
-        #print('not binary')
         binary = False
 
+#identify number of samples in VCF
 if binary == True:
     lenRow, samps = count_samples_bin(vcf)
 else:
     lenRow, samps = count_samples(vcf)
 
-#be careful w dictionaries!!!
-files = make_files(lenRow, samps, wd)
+#make a file for each sample in VCF
+files = make_files(samps, wd)
 
+#read VCF and separate samples into individual VCFs
 if binary == True:
     read_VCF_bin(vcf, files)
-    
 else:
     read_VCF(vcf, files)
-    
-masks = mask_TB(tbmf)
-#this is not parallelized, the more samples in the vcf the longer this will take
-#print(files)
-#print(masks)
 
+#read universal mask file outside of loop as it will be the same for each sample    
+masks = mask_TB(tbmf)
+
+#iterate through all files (if there is only one sample in VCF, loop will only iterate once)
+#this is not parallelized, the more samples in the vcf the longer this will take
 for f in files:
+    #ensure files closed after they were written to
     files[f].close()
-    ld = mask_low_depth(cf,cd)
+
+    #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
+    #find low coverage regions for each sample 
+    if cf != None:
+        ld = mask_low_depth(cf,cd)
+    else:
+        ld = None
+
+    #get sample name and filepath
     sample = os.path.basename(files[f].name)[:-4]
+    print('sample name here', sample)
     filepath = files[f].name
+    #remove irrelevant info from VCF file
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
 
@@ -1097,17 +1128,12 @@ for f in files:
     #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
     lines = vcf_to_diff(f'{filepath}.filt')
     os.system(f'rm {filepath}.filt')
-    all_lines = mask_and_write_diff(ld, masks,lines, samps, sample)
+    all_lines = mask_and_write_diff(ld, masks,lines, samps)
     with open(f'{wd}{sample}.txt','w') as o:
         o.write(f'{sample}\t{error}\t{cd}\n')
     with open(f'{wd}{sample}.diff','w') as o:
         for line in all_lines:
-            o.write('\t'.join(line)+'\n')
-    
-    
-
-   
-    
+            o.write('\t'.join(line)+'\n')   
 
 #SCRIPT ENDS HERE
 
