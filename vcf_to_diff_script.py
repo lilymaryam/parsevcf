@@ -22,10 +22,15 @@ len_ref = 4411532
 if wd[-1] != '/':
     wd = wd+'/'
 
-#Functions
-
-#for lines where len(ref)==len(alt), look for snps instead of processing as one large chunk                        
+#Functions                        
 def find_snps(line):
+    '''
+    for lines where len(ref)==len(alt), look for snps instead of processing as one large chunk 
+    args: 
+        line: a list containg the line from the VCF
+    output:
+        lines: a list of lists of lines to be added to the diff file 
+    '''
     ref = line[3]
     alt = line[4]
     end = len(ref)
@@ -40,9 +45,14 @@ def find_snps(line):
 
     return lines
 
-#for lines where len(ref) > 1 AND len(alt) == 1 
-#currently deletions and missing data are all converted to '-'
 def process_dels(line):
+    '''
+    for lines where len(ref) > 1 AND len(alt) == 1 (currently deletions and missing data are all converted to '-')
+    Args: 
+        line: a list containing info from a line of the VCF
+    output:
+        l: a list containing the diff-formatted version of the deletion
+    '''
     ref = line[3]
     alt = line[4]
     end = len(ref)
@@ -66,6 +76,13 @@ def process_dels(line):
 #for sitations where reference and alt do not align
 #will mask entire reference 
 def process_others(line):
+    '''
+    when reference and alt do not align (are differenct lens), mask entire reference 
+    Args:
+        line: a list containing info from a line of the VCF
+    Input: 
+        l: a list containing the diff-formatted version of the line
+    '''
     ref = line[3]
     alt = line[4]
     end = len(ref)
@@ -79,12 +96,18 @@ def process_others(line):
 #read TB mask file (different than coverage file) and generate sites to be masked
 #bed coverage file is 0 indexed, so add 1 to everything 
 def mask_TB(tbmf):
+    '''
+    Opens and reads bed file containing universally ignored TB positions
+    Args:
+        tbmf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
+    Output:
+        tb_sites: dictionary where key is start of masked region (1 index) and value is end of masked region (not inclusive)
+    '''
     tb_sites = {}
     with open(tbmf) as file:
         for line in file:
             line=line.strip().split()
             tb_sites[int(line[1])+1] = int(line[2])+1
-    #print('regions', tb_sites)
     return tb_sites
 
 #read coverage file and generate sites to be masked 
@@ -131,49 +154,66 @@ def mask_low_depth(cf, cd):
 
 #when merging ld and tb masks need to make sure the added masks are not overlapping
 def check_prev_mask(prev, line):
+    '''
+    when merging ld and tb masks, make sure the masks are not overlapping with previously added masks
+    Args:
+        prev: a list of the start and stop of the previously added mask region 
+        line: a list of the start and stop of the to-be-added mask region
+    Output:
+        overlap: a boolean meant to indicate if prev and line overlap
+        change: a list containing important information for updating the prev value
+    '''
     #currently not checking overlap to left of prev bc that indicates a bigger error
     #may need to change?
     overlap = False
     change = None
-    #print('prev', prev)
-    #print('line', line)
-    #if prev != None:
+    
     prev_s = int(prev[0])
     prev_e = int(prev[1])
     line_s = int(line[0])
     line_e = int(line[1])
-    #if prev != None:
-    #print('prev', prev_s, prev_e, 'line', line_s, line_e)
+
+    '''
+    DEBUGGING
+    print('prev', prev_s, prev_e, 'line', line_s, line_e)
+    '''
+
+    #NO OTHER CONDITIONALS NEEDED BC LINE CANT BE TO THE LEFT OF PREV AND IF LINE HAS NO OVERLAP W PREV NO TRACKING IS NEEDED 
+    #add error checking to make sure line isn't to left of prev?
+
+    #if line is completely contained inside prev, line should not be added to all_sites 
     if line_s >= prev_s and line_e <= prev_e:
-        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
         overlap = True
-        #print('Full OVERLAP!!!!!')
-        #print('overlap',overlap, 'change', change)
+    #if line is overlapping the right end of prev
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
-        #print('prev', prev_s, prev_e, 'line', line_s, line_e)
         overlap = True 
-        #print('right overlap!!!!!!')
         prev[1] = line_e
         change = prev
-        #print('overlap',overlap, 'change', change)
     return overlap, change
 
 
 def condense_mask_regions(ld_sites,tb_sites):
-    #ld_sites = mask_low_depth(cf, cd)
-    #tb_sites = mask_TB(tbmf)
+    '''
+    for instances with low-depth masking, combine low-depth masks and universal masks into a single data structure 
+    Args: 
+        ld_sites: a dictionary containing low-depth sites to be masked
+        tb_sites: a dictionary containing universal masking sites 
+    Output:
+        all_sites: a dictionary containing all masking sites from both universal and low-depth
+    '''
+    #editing thought: would likely benefit from being a list rather than a dictionary 
     tb_keys = sorted(tb_sites.keys())
     ld_keys = sorted(ld_sites.keys())
     all_sites = {}
-    #print('ld',ld_keys)
-    #print('tb',tb_keys)
     tb_keys_ind = 0
     ld_keys_ind = 0
-    cont = 0
+    #cont = 0
+
+    #track previous line in all_sites
     prev = None
+    #iterate through tb_keys and ld_keys exactly 1 time, track index of keys as you iterate
     while tb_keys_ind < len(tb_keys) or ld_keys_ind < len(ld_keys):
-        
-            #print(all_sites_keys[-1])
+        #if still iterating through both lists
         if tb_keys_ind < len(tb_keys) and ld_keys_ind < len(ld_keys): 
             tb_start = tb_keys[tb_keys_ind]
             tb_end =  tb_sites[tb_keys[tb_keys_ind]]
@@ -303,7 +343,7 @@ def condense_mask_regions(ld_sites,tb_sites):
             #tb_keys_ind += 1
             tb_keys_ind += 1 
 
-        cont += 1
+        #cont += 1
         #print('tb ind', tb_keys_ind)
         #print('ld ind', ld_keys_ind)
         #print('len tb', len(tb_keys))
@@ -1060,7 +1100,7 @@ with gzip.open(vcf, 'r') as test:
     try:
         test.read(1)
     except OSError:
-        #print('not binary')
+        #print('not binary'
         binary = False
 
 if binary == True:
