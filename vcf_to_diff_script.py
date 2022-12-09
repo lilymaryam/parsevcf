@@ -360,8 +360,6 @@ def squish(lines):
                     #if prev and line don't overlap, add prev to newLines and update prev
                     newLines.append(prev) 
                     prev = line
-                    
-                
             
             #the first line of file becomes prev variable 
             else:
@@ -511,139 +509,145 @@ def vcf_to_diff(vcf_file):
     newLines = squish(lines)
     return newLines
 
-def make_files(lenRow, samps,wd):
+def make_files(samps,wd):
+    '''
+    Initializes and opens VCF file for each sample in the VCF (will create smaller VCFs for multi-sample VCFs 
+    and create a separate editable temp VCF from the original input)
+    Args: 
+        samps: a list of sample names
+        wd: a working directory where all files should be created *make sure directory contains enough space for all uncompressed 
+        sampleVCFs 
+    outputs:
+        files: a dictionary that has the column number as key and the VCF filepath as the value
+    '''
     files = {}
     for i in range(len(samps)):
-        #print(i)
         s = samps[i]
-        #print(s)
+        #replace '/' in sample name with '-'
         if '/' not in s:
             file = open(f'{wd}{s}.vcf','w')
         else:
             newname = s.replace('/', '-')
-            #print(newname)
             file = open(f'{wd}{newname}.vcf','w')
-        #files.append(file)
         files[i+9] = file
-        #print(files)
     return files
-
-                            
+                      
 def count_samples(vcf):
-    #open file to indentify number of samples 
+    '''
+    opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
+    *note that VCF is 1-indexed and will remain as such
+    args: 
+        vcf: uncompressed VCF containing >=1 samples
+    returns:
+        lenRow: an int that determines number of columns in VCF (including metadata)
+        samps: a list of sample names from the VCF
+    '''
     with open(vcf, 'r') as v:
         for line in v:
             #if the line is not part of the heading
             if not line.startswith('##'):
-
                 #if the line contains the column names 
                 #note that this assumes 9 meta data columns, if you need to account for more/less change this 
                 if line.startswith('#'):
                     line = line.strip().split('\t')
                     samps = line[9:]
                     lenRow = len(line)
-
-                    #this is the 1-indexed indices for each row of the file, we will keep these values as they can be 
-                    # traced from the largest vcf to the subvcfs to make sure all of the info is consistent
-                    #print('lenRow',lenRow)
                     break
-    
     return lenRow, samps                           
 
 
 def count_samples_bin(vcf):
-    #open file to indentify number of samples 
+    '''
+    opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
+    *note that VCF is 1-indexed and will remain as such
+    args: 
+        vcf: compressed VCF containing >=1 samples
+    returns:
+        lenRow: an int that determines number of columns in VCF (including metadata)
+        samps: a list of sample names from the VCF
+    '''
     with gzip.open(vcf, 'rt') as v:
         for line in v:
             #if the line is not part of the heading
             if not line.startswith('##'):
-
                 #if the line contains the column names 
                 #note that this assumes 9 meta data columns, if you need to account for more/less change this 
                 if line.startswith('#'):
                     line = line.strip().split('\t')
                     samps = line[9:]
                     lenRow = len(line)
-
-                    #this is the 1-indexed indices for each row of the file, we will keep these values as they can be 
-                    # traced from the largest vcf to the subvcfs to make sure all of the info is consistent
-                    #print('lenRow',lenRow)
                     break
-    
     return lenRow, samps
 
 def read_VCF(vcf, files):
-    #count = 0 
+    '''
+    open uncompressed VCF and separate columns into individual sample VCFs 
+    *note slightly redundant if VCF only contains one sample but allows for editing of VCF wo changing 
+    original file
+    Args:
+        vcf: uncompressed VCF 
+        files: dictionary of VCF files to fill in with VCF info
+    Outputs:
+        none
+    '''
     with open(vcf) as v:
         for line in v:
+            #for lines not in heading
             if not line.startswith('##'):
                 line = line.strip().split()
+                #position data for all samples
                 position = line[0:9] 
-                #print('position', position)
-                #print(len(line))
-                #count = 1
                 for f in files:
-                    #print('f',f)
-                    #print(files[f])
-                    #count += 1
+                    #sample specific data
                     parcel = [line[f]]
-                    #print('parcel',parcel)
-                    #print(parcel)
                     newline = position+parcel
-                    #print(newline)
-                    #print(len(newline))
+                    #write position and sample data to file in VCF format
                     files[f].write('\t'.join(newline)+'\n')
-                    #print(position[1],f,files[f][0])
-                    #print(f)
-                    
-                #count += 1
-
-            
-                
-            
+            #write position and sample data to file in VCF format
             else:
-                #print(line)
+                #write heading to new VCF file 
                 for f in files:
                     files[f].write(line)
 
 def read_VCF_bin(vcf, files):
-    #count = 0 
+    '''
+    open compressed VCF and separate columns into individual sample VCFs 
+    *note: only reads file once regardless of number of samples
+    *note slightly redundant if VCF only contains one sample but allows for editing of VCF wo changing 
+    original file
+    Args:
+        vcf: compressed VCF 
+        files: dictionary of VCF files to fill in with VCF info
+    Outputs:
+        none
+    '''
     with gzip.open(vcf, 'rt') as v:
         for line in v:
+            #for lines not in heading
             if not line.startswith('##'):
                 line = line.strip().split()
+                #position data for all samples
                 position = line[0:9] 
-                #print('position', position)
-                #print(len(line))
-                #count = 1
                 for f in files:
-                    #print('f',f)
-                    #print(files[f])
-                    #count += 1
+                    #sample specific data
                     parcel = [line[f]]
-                    #print('parcel',parcel)
-                    #print(parcel)
                     newline = position+parcel
-                    #print(newline)
-                    #print(len(newline))
+                    #write position and sample data to file in VCF format 
                     files[f].write('\t'.join(newline)+'\n')
-                    #print(position[1],f,files[f][0])
-                    #print(f)
-                    
-                #count += 1
-
-            
-                
-            
             else:
-                #print(line)
                 for f in files:
                     files[f].write(line)
 
-    #else:
-    #    print('prev', prev, 'line', line_s, line_e)
-
 def check_prev_line(prev, line):
+    '''
+    when merging lines and masks, make sure all newly added lines are not overlapping with previously added ones
+    Args:
+        prev: a list containing the most recent added line to all_lines
+        line: a list containing the line to be added next to all_lines
+    Outputs:
+        overlap: a boolean meant to indicate if prev and line overlap
+        change: a list containing important information for updating the prev value
+    '''
     #currently not checking overlap to left of prev bc that indicates a bigger error
     #may need to change?
     overlap = False
@@ -1074,7 +1078,7 @@ else:
     lenRow, samps = count_samples(vcf)
 
 #be careful w dictionaries!!!
-files = make_files(lenRow, samps, wd)
+files = make_files(samps, wd)
 
 if binary == True:
     read_VCF_bin(vcf, files)
