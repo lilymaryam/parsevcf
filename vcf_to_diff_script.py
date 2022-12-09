@@ -222,77 +222,65 @@ def condense_mask_regions(ld_sites,tb_sites):
 
             if ld_start < tb_start:
                 if ld_end < tb_start:
-                    #print(f'ld{ld_keys_ind} is below tb{tb_keys_ind}')
-                    #print('ld', ld_start, ld_end)
-                    #print('tb', tb_start, tb_end)
+                    #the low-depth site is completely to the left of the universal site
                     if prev != None:
+                        #before adding to all_sites, make sure it doesn't overlap prev
                         overlap, change = check_prev_mask(prev, [ld_start, ld_end])
+                        #if overlap is detected AND requires prev to be updated
                         if overlap == True and change != None:
-                            #print('change', 'need to update prev!!!!!', change)
-                            #print(f'ld{ld_keys_ind} is below tb{tb_keys_ind}')
-                            #print('ld', ld_start, ld_end)
-                            #print('tb', tb_start, tb_end)
+                            #update prev in all_sites
                             all_sites[change[0]] = change[1]
                     if prev == None or overlap == False:
+                        #add new site to all_sites
                         all_sites[ld_start] = ld_end
+                    #update ld index because site was processed
                     ld_keys_ind += 1
                 elif ld_end >= tb_start:
-                    #print('left overlap')
-                    #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                    #this accounts for ld overlapping tb on the left
                     if prev != None:
                         overlap, change = check_prev_mask(prev, [ld_start, tb_end])
                         if overlap == True and change != None:
-                            #print('prev', prev, 'change', change)
+                            #if new region overlaps, update prev
                             all_sites[change[0]] = change[1]
+                    #if there is no overlap, add new region to all_sites
                     if prev == None or overlap == False:
-                        #if prev == None:
-                        #    print('first')
-                        #elif overlap == False:
-                        #    print('overlap = ', overlap)
                         all_sites[ld_start] = tb_end
+                    #since both regions are added at the same time, update index for both lists
                     tb_keys_ind += 1
                     ld_keys_ind += 1
             
             elif ld_start <= tb_end and ld_end > tb_end:
-                #print('right over lap')
-                #print('left overlap')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                #if ld overlaps tb on the right
                 if prev != None:
+                    #before adding to all_sites, make sure it doesn't overlap prev
                     overlap,change = check_prev_mask(prev, [tb_start, ld_end])
                     if overlap == True and change != None:
-                        #print('change', change)
                         all_sites[change[0]] = change[1]
+                #if there is no overlap, add new region to all_sites
                 if prev == None or overlap == False:
                     all_sites[tb_start] = ld_end
+                #since both regions are added at the same time, update index for both lists
                 tb_keys_ind += 1
                 ld_keys_ind += 1
 
             elif ld_start > tb_end:
-                #print('no overlap')
-                #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
+                #if there is no overlap between ld and tb, and ld is on the right
                 if prev != None:
+                    #before adding to all_sites, make sure it doesn't overlap prev
                     overlap,change = check_prev_mask(prev, [tb_start, tb_end])
                     if overlap == True and change != None:
-                        #print('change', change)
-                        #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                        #print('ld', ld_start, ld_end)
-                        #print('tb', tb_start, tb_end)
                         all_sites[change[0]] = change[1]
                 if prev == None or overlap == False:
+                    #if there is no overlap, add new region to all_sites
                     all_sites[tb_start] = tb_end
                 tb_keys_ind += 1
 
             elif ld_start >= tb_start and ld_end <= tb_end:
-                #print('full overlap: ld inside')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
+                # if tb and ld fully overlap with ld inside
                 if prev != None:
+                    #make sure tb doesnt overlap prev 
                     overlap,change = check_prev_mask(prev, [tb_start, tb_end])
                     if overlap == True and change != False:
-                        #print('change', change)
                         all_sites[change[0]] = change[1]
                 if prev == None or overlap == False:
                     all_sites[tb_start] = tb_end
@@ -301,86 +289,75 @@ def condense_mask_regions(ld_sites,tb_sites):
 
             
             elif ld_start <= tb_start and ld_end >= tb_end:
-                #print('full overlap: tb inside')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                #if ld and tb fully overlap with tb inside
                 if prev != None:
+                    #make sure ld doesnt overlap prev
                     overlap,change = check_prev_mask(prev, [ld_start, ld_end])
                     if overlap == True and change != None:
-                        #print('change', change)
                         all_sites[change[0]] = change[1]
                 if prev == None or overlap == False:
                     all_sites[ld_start] = ld_end
                 tb_keys_ind += 1
                 ld_keys_ind += 1
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
+                
+            #covered all 6 possible positions of the two regions
+            '''
+            DEBUG
+            print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+            '''
 
-            #else:
-                #print('other', 'what else could happen?')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
-                #all_sites[tb_start]
-
-
-                #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
-            #print('tb',tb_keys[tb_keys_ind], tb_sites[tb_keys[tb_keys_ind]])
-            #print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+        #possible bug: prev overlaps with one list the first time the other list expires
         elif tb_keys_ind >= len(tb_keys) and ld_keys_ind < len(ld_keys):
-            #print('no more tb masks, ld only')
+            #if reach end of tb_masks process ld only
             ld_start = ld_keys[ld_keys_ind]
             ld_end = ld_sites[ld_keys[ld_keys_ind]]
             all_sites[ld_start] = ld_end
-            #tb_keys_ind += 1
             ld_keys_ind += 1
 
-
+        #possible bug: prev overlaps with one list the first time the other list expires
         elif ld_keys_ind >= len(ld_keys) and tb_keys_ind < len(tb_keys):
-            #print('no more ld masks, tb only')
+            #if reach end of ld masks process tb only
             tb_start = tb_keys[tb_keys_ind]
             tb_end = tb_sites[tb_keys[tb_keys_ind]]
             all_sites[tb_start] = tb_end
-            #tb_keys_ind += 1
             tb_keys_ind += 1 
 
-        #cont += 1
-        #print('tb ind', tb_keys_ind)
-        #print('ld ind', ld_keys_ind)
-        #print('len tb', len(tb_keys))
-        #print('len ld', len(ld_keys))
-        #if cont == 10000:
-        #    print(all_sites)
-        #    break
-        #prev = 
+        #keep all sites sorted
         if len(all_sites) > 0:
             all_sites_keys = sorted(all_sites.keys())
+        #track last site for every iteration
         prev = [all_sites_keys[-1],all_sites[all_sites_keys[-1]]]
     return all_sites
                     
 def squish(lines):
-    #condenses diff lines that can be compressed into a single line
-    #print('SQUISH')
+    '''
+    condenses diff lines that can be compressed into a single line
+    Args:
+        lines: a list of diff-formatted lines each stored as a list
+    Outputs:
+        newlines: a list of diff-formatted lines after compression
+    '''
+    #track previous line in lines
     prev = None
+    #create a new list of lines for after compression
     newLines = []
     for line in lines:
-        #print(line)
+        #skip header 
         if not line[0].startswith('>'):
+            #if not the first line in the file
             if prev != None:
-                #print('line', line)
-                #print('prev', prev)
+                #if prev and line have the same nucleotide
                 if prev[0] == line[0]:
-                    
+                    #if end of prev overlaps w beginning of line
                     if int(prev[1]) == int(line[1])-int(prev[2]):
-                        #print('squish', 'prev', prev, 'line', line)
-                        #print('prev', prev, 'now', line)
+                        #rewrite prev and line into a new prev
                         prev[2] = str(int(prev[2])+int(line[2]))
-                        #print('new prev', prev)
                     else:
-                        #o.write('\t'.join(prev)+'\n')
+                        #if prev and line don't overlap, add prev to newLines and update prev
                         newLines.append(prev) 
                         prev = line
                 else:
-                    #o.write('\t'.join(prev)+'\n')
+                    #if prev and line don't overlap, add prev to newLines and update prev
                     newLines.append(prev) 
                     prev = line
                     
@@ -388,62 +365,79 @@ def squish(lines):
             
             #the first line of file becomes prev variable 
             else:
-                
-                #print('first prev!', prev)
-                #newLines.append(line)
                 prev = line
         #write header to new file
         else:
             newLines.append(line)
-            #print(line)
-            #o.write(line) 
+    #add last prev to end of newLines
     if prev != None:
         newLines.append(prev)  
+    else:
+        #prev should probably not be None
+        print('no lines in file?')
+    #should i overwrite lines variable for storage consideration?
     return newLines
 
-                              
-#option to write output to file
 def vcf_to_diff(vcf_file):
-    #takes a single sample vcf and converts to diff format 
+    '''
+    takes a single sample vcf and converts to diff format
+    NOTE: this function makes the assumption that incoming diff file is genotyped as diploid
+    Args: 
+        vcf_file: uncompressed single sample vcf 
+    Outputs:
+        newlines: a list of diff-formatted lines for the file
+    ''' 
     lines = []
     with open(vcf_file, 'rt') as v:
-        #with open(output, 'w') as o:
-        missing = 0
+        #missing = 0
         total = 0
         for line in v:
+            #ignore header lines
             if not line.startswith('##'):
+                #find column names
                 if line.startswith('#'):
                     line = line.strip().split()
+                    #last column name is single-sample vcf will be sample name
                     sample = line[-1]
-                    #print('sample', sample)
-                    #o.write(f'>{sample}\n')
+                    #make diff file header
                     lines.append([f'>{sample}'])
+                #all position lines
                 else:
-                    total += int(len(line[3]))
+                    #total += int(len(line[3]))
                     line = line.strip().split()
+                    #genotype
                     var = line[-1]
-                    #print('line[3]', line[3])
-                    if len(line[4].split(','))>1:
 
+                    # for all lines with multiple alt alleles
+                    if len(line[4].split(','))>1:
                         print('OPTIONS!!!!', line[4].split(','))
+
+                    #combine ref allele and alt alleles
                     alleles = [line[3]] + line[4].split(',')
                     
+                    #if genotype is not reference allele
                     if var != '0/0':
                         print('line',line)
                         print('alleles', alleles)
-                        genos = var.split('/')
-                        #print('genos', genos)
 
+                        #split genotype to check for heterozygosity
+                        genos = var.split('/')
                         
                         if var == './.':
-                            #print('missing', line)
+                            #potentially useful to track number of positions with missing info 
                             #missing += int(len(line[3]))
                             line[4] = '-'
                             line [-1] = '1'
                             print('missing', line)
 
-                        #assumes diploid
+                        #assumes diploid genotype
+                        #if genotype is heterozygous and reference position is not and indel
+                        #NOTE: may need to change this later when indels are not ignored by usher 
                         elif genos[0]!= genos[1] and len(line[3])==1:
+                            print('HETERO', line)
+                            print('genos', genos)
+                            print('alleles', alleles)
+                            
                             IUPAC = {
                                 'R':['A','G'], 
                                 'Y':['C','T'],
@@ -452,12 +446,11 @@ def vcf_to_diff(vcf_file):
                                 'K':['G','T'],
                                 'M':['A','C']   
                                     }
-                            print('HETERO')
-                            print(line)
-                            print('genos', genos)
-                            print('alleles', alleles)
+                            
+                            #generated sorted list of both alleles genotyped 
                             vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
                             print('vars', vars)
+                            #if the heterozygous position is a SNP, replace with an IUPAC symbol
                             if len(vars[0])==len(vars[1])==1:
                                 print('SNP')
                                 for key in IUPAC:
@@ -470,29 +463,16 @@ def vcf_to_diff(vcf_file):
                                         print('line after ', line)
                                         break
 
-                            #if one of the vars is an indel you should mask        
+                            ##if one of the vars is an indel, mask the position       
                             else:
                                 print('one of alleles is an indel, mask the ref for clarity')
                                 print(line)
                                 line[4] = '-'
                                 line [-1] = '1'
                                 print('after', line)
-                                #var = var.split('/')
-                                #var = var[0]
-                                #alts = line[4].split(',')
-                                #alt = alts[int(var)-1]
-                                #line[4] = alt
-                                #line[-1] = '1'
 
-
-                            
-                            
-                            
-                        
-                        
-
+                        #if reference is an indel and/or genotype is homozygous
                         else: 
-                            
                             var = var.split('/')
                             var = var[0]
                             alts = line[4].split(',')
@@ -500,51 +480,36 @@ def vcf_to_diff(vcf_file):
                             line[4] = alt
                             line[-1] = '1'
 
-                        #print('line', line)
+                        #after above processing there should only be a string with one alt allele
                         assert type(line[4]) == str
+
+                        #if len of ref position and len of alt are both one, process as a SNP
                         if len(line[3]) == 1:
-
                             if len(line[4]) == 1:
-                                #print(line)
-                                #o.write('\t'.join([line[4],line[1], '1'])+'\n')
                                 lines.append([line[4],line[1], '1'])
-                            #elif len(line[4]) > 1:
-                                #print('insertion')
-
+                            #if len(line[4]) > 1, the position is an insertion which will not be included in the file
 
                         elif len(line[3]) > 1:
                             if len(line[4]) == len(line[3]):
-                                #print(line)
+                                #if the ref and alt are both longer than 1 but equal to each other,
+                                #search through alt for snps
                                 newlines = find_snps(line)
                                 for n in newlines:
-                                    #o.write('\t'.join(n)+'\n')
                                     lines.append(n)
 
                             elif len(line[4]) == 1:
-                                #print('deletion')
+                                #if ref is >1 and alt=1, process line as a simple deletion
                                 newline = process_dels(line)
-                                #print(newline)
-                                #o.write('\t'.join(newline)+'\n')
                                 lines.append(newline)
 
                             else:
+                                #if len(ref) and len(alt) are both greater than 1 but not the same len as each other
                                 newline = process_others(line)
-                                #o.write('\t'.join(newline)+'\n')
                                 lines.append(newline)
-    #figure out how to count missing data and add stats here 
-    #with open('testlines','w') as o:
-    #    for line in lines:
-    #        o.write('\t'.join(line)+'\n')
+    
+    #compress adjacent diff lines where possible 
     newLines = squish(lines)
     return newLines
-
-                                    #print('indel', line)
-                                #print(line)
-            #print('missing', missing, 'total', total)
-
-    #return sample, missing, total
-    #return sample, missing, total
-
 
 def make_files(lenRow, samps,wd):
     files = {}
