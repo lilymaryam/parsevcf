@@ -651,7 +651,7 @@ def check_prev_line(prev, line):
     change = None
 
     '''
-    DEBUG
+    #DEBUG
     print('prev', prev)
     print('line', line)
     '''
