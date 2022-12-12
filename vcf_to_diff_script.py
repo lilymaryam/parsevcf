@@ -71,10 +71,7 @@ def process_dels(line):
         l = ['-', line[1], str(len(line[3]))]
         
     return l
-
-
-#for sitations where reference and alt do not align
-#will mask entire reference 
+ 
 def process_others(line):
     '''
     when reference and alt do not align (are differenct lens), mask entire reference 
@@ -93,11 +90,10 @@ def process_others(line):
 
     return l
 
-#read TB mask file (different than coverage file) and generate sites to be masked
-#bed coverage file is 0 indexed, so add 1 to everything 
 def mask_TB(tbmf):
     '''
     Opens and reads bed file containing universally ignored TB positions
+    note: bed coverage file is 0 indexed, so 1 added to everything 
     Args:
         tbmf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
     Output:
@@ -110,49 +106,51 @@ def mask_TB(tbmf):
             tb_sites[int(line[1])+1] = int(line[2])+1
     return tb_sites
 
-#read coverage file and generate sites to be masked 
-#if coverage does not have HR37c reference it will throw an error (this can be changed)
-#bed files are 0-indexed in col1 and 1-indexed in col2, i am adding one to both to make them one indexed
-#and to maintain their mapping logic
 def mask_low_depth(cf, cd):
+    '''
+    read bed coverage file and generate sites to be masked 
+    note: if coverage does not have HR37c reference it will throw an error (this can be changed)
+    note: bed files are 0-indexed in col1 and 1-indexed in col2, i am adding one to both to make them both one indexed
+    Args: 
+        cf: path to bed coverage file 
+        cd: integer indicating coverage depth needed 
+    out:
+        ld_sites: dictionary of low-depth sites needing to be masked 
+    '''
     ld_sites = {}
     prev = None
     with open(cf) as cf:
         for line in cf:
+            #might need to delete or change this
             #for currect bed coverage file 
             if line.startswith('NC_000962.3'):
                 line = line.strip().split()
-                #print('pre',line)
+                #re-index to match VCF
                 line[1] = str(int(line[1])+1)
                 line[2] = str(int(line[2])+1)
-                #print('post',line)
+                #if the coverage is below cd
                 if int(line[3]) < cd:
-                    #print('prev', prev)
-                    #print(line)
                     if prev == None:
+                        #for first low-coverage line in file
                         ld_sites[int(line[1])] = int(line[2])
                         prev = [int(line[1]), int(line[2])]
                     else:
+                        #for all subsequent low-coverage lines, determine if they can be combined 
+                        #if start of line is the same as the end of prev
                         if int(line[1]) == prev[1]:
+                            #combine sites and update prev
                             ld_sites[prev[0]] = int(line[2])
-                            #print('squish', 'prev', prev, 'line', line)
                             prev[1] = int(line[2])
-
+                        #create a new site and update prev
                         else:
-                            #print('no squish')
                             ld_sites[int(line[1])] = int(line[2])
                             prev = [int(line[1]), int(line[2])]
-                    
-
+    #this conditional might need to be fixed if there are no low-coverage areas
     if ld_sites == {}:
         raise Exception('coverage file has incorrect reference')
-    #print('regions', count)
-    #print('ld_sites', len(ld_sites))
-    #for l in ld_sites:
-    #    print(l, ld_sites[l])
+
     return ld_sites
 
-#when merging ld and tb masks need to make sure the added masks are not overlapping
 def check_prev_mask(prev, line):
     '''
     when merging ld and tb masks, make sure the masks are not overlapping with previously added masks
