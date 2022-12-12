@@ -697,7 +697,8 @@ def check_prev_line(prev, line):
     #elif line_s <= prev_s and line_e >= prev_s:
     print('overlap',overlap, 'change', change)
     return overlap, change
-    
+
+#def interpret_overlap()  
 
 def mask_and_write_diff(ld, tb_masks, lines, samps):
     '''
@@ -853,7 +854,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
         
         elif masks_ind >= len(masks_key) and lines_ind < len(lines):
             #after mask list is completely read
-            #print('no more masks, lines only')
+            print('no more masks, lines only')
 
             line = lines[lines_ind]
             line_start = line[1]
@@ -873,27 +874,25 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
 
         elif lines_ind >= len(lines) and masks_ind < len(masks_key):
             #after lines list is completely read and masks are left 
-            #print('no more lines, masks only')
+            print('no more lines, masks only')
 
             mask_start = masks_key[masks_ind]
             mask_end =  masks[mask_start]
 
-            #add this at some point 
-            '''
             if prev != None:
-                    #change here
-                    overlap,change = check_prev_line(prev, line)
-                    if overlap == True and change != None:
-                        #do i need to change this?
-                        print('change!!!!!', change)
-                        #all_lines[change[0]] = change[1]
+                #change here
+                overlap,change = check_prev_line(prev, ['-', str(mask_start), str(mask_end-mask_start)])
+                if overlap == True and change != None:
+                    #do i need to change this?
+                    print('change!!!!!', change)
+                    #all_lines[change[0]] = change[1]
             if prev == None or overlap == False:
-                
                 #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])    
-                print('add as is!!!!!!', 'line', line, 'prev', prev )
-                all_lines.append(line)'''
+                print('add mask as is!!!!!!', 'mask', mask_start, mask_end, 'prev', prev )
+                all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
+                
 
-            all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
+            #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
             masks_ind += 1 
         
         
