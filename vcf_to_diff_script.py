@@ -690,13 +690,26 @@ def check_prev_line(prev, line):
             print('truly right overlap', 'prev', prev, 'line', line)
 
             #COME BACK HERE WEDS!!!!!!!!!!! need to figure out how to add two lines 
-            if prev[0] != line[0]:
+            if prev[0] == '-' and line[0] != '-':
                 print('masking needed', prev)
                 print('masking needed', line)
-            else:
+                line[1] = str(prev_e)
+                line[2] = str(line_e-prev_e)
+                print('newline', line)
+                newline = line
+
+            elif prev[0] != '-' and line[0] == '-':
+                print('masking needed complicated', prev)
+                print('masking needed complicated', line)
+
+                
+            elif prev[0] == line[0]:
+                print('combine!')
                 prev[2] = str(line_e-prev_s)
                 print('prev after ', prev)
                 change = prev
+            else:
+                print('BAD NEWS', 'line',line, 'prev', prev )
             
 
             #change = line
@@ -714,7 +727,8 @@ def check_prev_line(prev, line):
             print('prev after ', prev)
             change = prev
     #elif line_s <= prev_s and line_e >= prev_s:
-    print('overlap', overlap, 'change', change, 'newline',newline)
+    if newline != None:
+        print('overlap', overlap, 'change', change, 'newlin',newline)
     return overlap, change, newline
 
 #def interpret_overlap()  
@@ -775,6 +789,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
+                    if newline != None:
+                        all_lines.append(newline)
+                        print('append!!!!', newline)
                 if prev == None or overlap == False:
                     all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
 
@@ -790,6 +807,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
+                    if newline != None:
+                        all_lines.append(newline)
+                        print('append!!!!', newline)
                 if prev == None or overlap == False:
                     
                     all_lines.append(line)
@@ -810,6 +830,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                             
                             all_lines[-1][2] = change[2]
                             print('after',all_lines[-1])
+                        if newline != None:
+                            all_lines.append(newline)
+                            print('append!!!!', newline)
                     if prev == None or overlap == False:
                         all_lines.append(line)
                     lines_ind += 1
@@ -824,6 +847,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                         if overlap == True and change != None:
                             print('change', change)
                             #all_sites[change[0]] = change[1]
+                        if newline != None:
+                            all_lines.append(newline)
+                            print('append!!!!', newline)
                     if prev == None or overlap == False:
                         all_lines.append(['-', str(line_start), str(mask_end-line_end)])
                     masks_ind += 1
@@ -839,6 +865,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
+                    if newline != None:
+                        all_lines.append(newline)
+                        print('append!!!!', newline)
                 if prev == None or overlap == False:
                     all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
                 masks_ind += 1
@@ -853,6 +882,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     if overlap == True and change != None:
                         print('change', change)
                         #all_sites[change[0]] = change[1]
+                    if newline != None:
+                        all_lines.append(newline)
+                        print('append!!!!', newline)
                 if prev == None or overlap == False:
                 
                     all_lines.append(['-', str(mask_start), str(line_end-mask_start)])
@@ -885,6 +917,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                         #do i need to change this?
                         print('change!!!!!', change)
                         #all_lines[change[0]] = change[1]
+                    if newline != None:
+                        all_lines.append(newline)
+                        print('append!!!!', newline)
             if prev == None or overlap == False:
                 print('add as is!!!!!!', 'line', line, 'prev', prev )
                 all_lines.append(line)
@@ -905,6 +940,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     #do i need to change this?
                     print('change!!!!!', change)
                     #all_lines[change[0]] = change[1]
+                if newline != None:
+                    all_lines.append(newline)
+                    print('append!!!!', newline)
             if prev == None or overlap == False:
                 #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])    
                 print('add mask as is!!!!!!', 'mask', mask_start, mask_end, 'prev', prev )
