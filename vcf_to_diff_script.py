@@ -673,20 +673,35 @@ def check_prev_line(prev, line):
         print('prev', prev_s, prev_e, 'line', line_s, line_e)
     elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
         overlap = True 
-        print('right overlap!!!!!!')
-        print('prev', prev)
-        print('line', line)
-        print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
-        if line_s == prev_e and line[-1]=='1':
-            #print('SNP')
+        print('right overlap vcftodiff', 'prev', prev_s, prev_e, 'line', line_s, line_e)
+        
+        #print('prev', prev)
+        #print('line', line)
+        #if line_s == prev_e and line[-1]=='1':
+
+        #if line[0] and prev[0] are the same, we can squish these, otherwise, ignore 
+        #squish later if necessary 
+        if line_s == prev_e:
+            print('start to end', line, prev)
             overlap = False
+
+        elif line_s < prev_e and line_e>prev_e:
+            print('truly right overlap', 'prev', prev, 'line', line)
+
+            #COME BACK HERE WEDS!!!!!!!!!!! need to figure out how to add two lines 
+            if prev[0] != line[0]:
+                print('masking needed', prev)
+                print('masking needed', line)
+            prev[2] = str(line_e-prev_s)
+            print('prev after ', prev)
+
             #change = line
-        elif line_s == prev_e and line[-1]!='1':
-            overlap = True
-            print('need to change this!!!', 'prev', prev, 'line', line)
-            print('prev')
+        #elif line_s == prev_e and line[-1]!='1':
+        #    overlap = True
+        #    print('need to change this!!!', 'prev', prev, 'line', line)
+        #    print('prev')
         else:
-            print('what is happening?')
+            print('what is happening?', prev, line)
             print('should be?',f'{line_e}-{prev_s}=',line_e-prev_s)
             print('what is ?', (line[2]), '-', (prev[1]))
             print('prev', prev)
@@ -995,6 +1010,7 @@ for f in files:
         ld = None
 
     sample = os.path.basename(files[f].name)[:-4]
+    print('sample', sample)
     filepath = files[f].name
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
