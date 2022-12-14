@@ -405,16 +405,16 @@ def vcf_to_diff(vcf_file):
                     var = line[-1]
 
                     # for all lines with multiple alt alleles
-                    if len(line[4].split(','))>1:
-                        print('OPTIONS!!!!', line[4].split(','))
+                    #if len(line[4].split(','))>1:
+                    #    print('OPTIONS!!!!', line[4].split(','))
 
                     #combine ref allele and alt alleles
                     alleles = [line[3]] + line[4].split(',')
                     
                     #if genotype is not reference allele
                     if var != '0/0':
-                        print('line',line)
-                        print('alleles', alleles)
+                        #print('line',line)
+                        #print('alleles', alleles)
 
                         #split genotype to check for heterozygosity
                         genos = var.split('/')
@@ -424,15 +424,15 @@ def vcf_to_diff(vcf_file):
                             #missing += int(len(line[3]))
                             line[4] = '-'
                             line [-1] = '1'
-                            print('missing', line)
+                            #print('missing', line)
 
                         #assumes diploid genotype
                         #if genotype is heterozygous and reference position is not and indel
                         #NOTE: may need to change this later when indels are not ignored by usher 
                         elif genos[0]!= genos[1] and len(line[3])==1:
-                            print('HETERO', line)
-                            print('genos', genos)
-                            print('alleles', alleles)
+                            #print('HETERO', line)
+                            #print('genos', genos)
+                            #print('alleles', alleles)
                             
                             IUPAC = {
                                 'R':['A','G'], 
@@ -652,9 +652,12 @@ def check_prev_line(prev, line):
 
     '''
     #DEBUG
-    print('prev', prev)
-    print('line', line)
+    print('masking prev ', prev)
+    print('masking line', line)
     '''
+
+    
+    
     prev_s = int(prev[1])
     prev_e = prev_s + int(prev[2])
     line_s = int(line[1])
@@ -671,11 +674,14 @@ def check_prev_line(prev, line):
         overlap = True
         print('Full OVERLAP!!!!!')
         print('prev', prev_s, prev_e, 'line', line_s, line_e)
-    elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
+    elif line_s >= prev_s and line_s < prev_e and line_e >= prev_e:
         overlap = True 
-        print('right overlap!!!!!!')
-        print('prev', prev)
-        print('line', line)
+        print('right overlap vcftodiff', 'prev', prev, prev_s, prev_e, 'line', line, line_s, line_e)
+        if prev[0] != line[0]:
+            print('masking prev ', prev)
+            print('masking line', line)
+        #print('prev', prev)
+        #print('line', line)
         print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
         if line_s == prev_e and line[-1]=='1':
             #print('SNP')
@@ -995,6 +1001,7 @@ for f in files:
         ld = None
 
     sample = os.path.basename(files[f].name)[:-4]
+    print('sample', sample)
     filepath = files[f].name
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
