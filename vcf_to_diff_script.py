@@ -688,8 +688,8 @@ def check_prev_line(prev, line):
         #squish later if necessary 
         if line_s == prev_e:
             print('start to end', line, prev)
-'''            
-#=======
+            '''            
+        #=======
         print('right overlap vcftodiff', 'prev', prev, prev_s, prev_e, 'line', line, line_s, line_e)
         #if prev[0] != line[0]:
         #    print('masking prev ', prev)
@@ -699,8 +699,8 @@ def check_prev_line(prev, line):
         print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
         if line_s == prev_e and line[-1]=='1':
             #print('SNP')
-#>>>>>>> main
-'''
+            #>>>>>>> main
+            '''
             overlap = False
 
         elif line_s < prev_e and line_e>prev_e:
