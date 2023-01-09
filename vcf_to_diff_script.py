@@ -151,6 +151,8 @@ def mask_low_depth(cf, cd):
 
     return ld_sites
 
+"""
+NOT FOR USE WITH UNIVERSAL MASK2REF
 def check_prev_mask(prev, line):
     '''
     when merging ld and tb masks, make sure the masks are not overlapping with previously added masks
@@ -326,6 +328,7 @@ def condense_mask_regions(ld_sites,tb_sites):
         #track last site for every iteration
         prev = [all_sites_keys[-1],all_sites[all_sites_keys[-1]]]
     return all_sites
+    """
                     
 def squish(lines):
     '''
@@ -762,14 +765,14 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
         all_lines: a list of diff-formatted lines including all of the masked regions
     '''
     
-    if ld != None:
-        assert len(samps) == 1
-        masks = condense_mask_regions(ld,tb_masks)
+    #if ld != None:
+    #    assert len(samps) == 1
+    #    masks = condense_mask_regions(ld,tb_masks)
         
-    else:
-        masks = tb_masks
+    #else:
+    #    masks = tb_masks
 
-    masks_key = sorted(masks.keys())
+    masks_key = sorted(tb_masks.keys())
     
     # iterate through all masks and lines one time and combine things as needed
     masks_ind = 0
@@ -1081,6 +1084,7 @@ for f in files:
     #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
     lines = vcf_to_diff(f'{filepath}.filt')
     os.system(f'rm {filepath}.filt')
+
     all_lines = mask_and_write_diff(ld, masks,lines, samps)
     with open(f'{wd}{sample}.txt','w') as o:
         o.write(f'{sample}\t{error}\t{cd}\n')
