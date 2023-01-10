@@ -29,7 +29,7 @@ task make_mask_and_diff {
 		awk '$4 < ~{min_coverage}' > \
 		~{basestem}_below_~{min_coverage}x_coverage.bedgraph
 	mkdir outs
-	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/fix_endstart/vcf_to_diff_script.py
+	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/712e286633d8b040b6690dd191bfc4b28a0dc3c9/vcf_to_diff_script.py
 	python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	>>>
 
