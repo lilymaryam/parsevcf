@@ -1029,17 +1029,19 @@ def mask2ref(lines, tb_masks):
                 print('full overlap')
                 lines_ind += 1
             
-            elif line_start <= tb_start and line_end >= tb_end:
-                print('full overlap OPPOSITE', lines[lines_ind])
+            elif line_start < tb_start and line_end > tb_end:
+                print('full overlap OPPOSITE', 'line',lines[lines_ind], 'tb', tb_start, tb_end)
+                #first segment of line before TB mask
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
-                lines[lines_ind][1] = str(line_start+int(new_line[2]))
-                lines[lines_ind][2] = str(line_end-int(lines[lines_ind][1]))
+                #update line after first segment AND TB mask
+                lines[lines_ind][1] = str(tb_end)
+                lines[lines_ind][2] = str(line_end-tb_end)
                 print('new line', new_line)
                 print('update line', lines[lines_ind])
                 final.append(new_line)
                 tb_keys_ind += 1
 
-            elif line_start < tb_start and line_end > tb_start and line_end <= tb_end:
+            elif line_start <= tb_start and line_end > tb_start and line_end <= tb_end:
                 print('left overlap')
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
                 print('old line', lines[lines_ind])
