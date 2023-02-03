@@ -94,5 +94,6 @@ task make_diff {
 	output {
 		File diff = glob("outs/*.diff")[0]
 		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
+		File report = glob("outs/*.txt")[0]
 	}
 }
