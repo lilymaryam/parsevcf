@@ -10,6 +10,7 @@ task make_mask_and_diff {
 		File vcf
 		File tbmf
 		Int min_coverage
+		Boolean histograms = false
 
 		# runtime attributes
 		Int addldisk = 250
@@ -28,6 +29,9 @@ task make_mask_and_diff {
 	bedtools genomecov -ibam sorted_u_~{basestem}.bam -bga | \
 		awk '$4 < ~{min_coverage}' > \
 		~{basestem}_below_~{min_coverage}x_coverage.bedgraph
+	if [[ "~{histograms}" = "true" ]]
+	then
+		bedtools genomecov -ibam sorted_u_~{basestem}.bam > histogram.txt
 	mkdir outs
 	# commit 2c7c8c4c2d57ac7e5f63c66d2922d4b50dff9322
 	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.0.3/vcf_to_diff_script.py
@@ -52,6 +56,7 @@ task make_mask_and_diff {
 		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
 		File mask_file = glob("*coverage.bedgraph")[0]
 		File report = glob("outs/*.report")[0]
+		File? histogram = "histogram.txt"
 	}
 }
 
