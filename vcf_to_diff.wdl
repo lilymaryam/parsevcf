@@ -51,6 +51,7 @@ task make_mask_and_diff {
 		File diff = glob("outs/*.diff")[0]
 		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
 		File mask_file = glob("*coverage.bedgraph")[0]
+		File report = glob("outs/*.txt")[0]
 	}
 }
 
