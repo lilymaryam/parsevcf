@@ -30,7 +30,7 @@ task make_mask_and_diff {
 		~{basestem}_below_~{min_coverage}x_coverage.bedgraph
 	mkdir outs
 	# commit 2c7c8c4c2d57ac7e5f63c66d2922d4b50dff9322
-	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/1.0.1/vcf_to_diff_script.py
+	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.0.3/vcf_to_diff_script.py
 	python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	>>>
 
@@ -51,7 +51,7 @@ task make_mask_and_diff {
 		File diff = glob("outs/*.diff")[0]
 		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
 		File mask_file = glob("*coverage.bedgraph")[0]
-		File report = glob("outs/*.txt")[0]
+		File report = glob("outs/*.report")[0]
 	}
 }
 

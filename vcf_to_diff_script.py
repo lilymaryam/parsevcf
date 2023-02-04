@@ -1294,8 +1294,8 @@ for f in files:
 
 
 
-    with open(f'{wd}{sample}.txt','w') as o:
-        o.write(f'{sample}\t{error}\t{cd}\n')
+    with open(f'{wd}{sample}.report','w') as o:
+        o.write(f'{sample}.diff\t{error}\t{cd}\n')
     with open(f'{wd}{sample}.diff','w') as o:
         for line in final_lines:
             o.write('\t'.join(line)+'\n')
