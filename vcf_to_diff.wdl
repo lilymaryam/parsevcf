@@ -32,6 +32,7 @@ task make_mask_and_diff {
 	if [[ "~{histograms}" = "true" ]]
 	then
 		bedtools genomecov -ibam sorted_u_~{basestem}.bam > histogram.txt
+	fi
 	mkdir outs
 	# commit 2c7c8c4c2d57ac7e5f63c66d2922d4b50dff9322
 	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.0.3/vcf_to_diff_script.py
