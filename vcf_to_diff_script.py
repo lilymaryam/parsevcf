@@ -1,6 +1,7 @@
 import os
 import argparse
 import gzip
+import logging
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
@@ -8,6 +9,7 @@ parser.add_argument('-d', '--working_directory', required=True, type=str, help='
 parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
+parser.add_argument('-l', '--logging', required=False, default=False, type=bool, help="if True, logging.debug verbose logging to stdout, else suppress most logging")
 
 args = parser.parse_args()
 vcf = args.VCF
@@ -15,6 +17,10 @@ wd = args.working_directory
 tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
+if args.logging is True:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.WARNING)
 
 len_ref = 4411532
 
@@ -175,7 +181,7 @@ def check_prev_mask(prev, line):
 
     '''
     DEBUGGING
-    print('prev', prev_s, prev_e, 'line', line_s, line_e)
+    logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
     '''
 
     #NO OTHER CONDITIONALS NEEDED BC LINE CANT BE TO THE LEFT OF PREV AND IF LINE HAS NO OVERLAP W PREV NO TRACKING IS NEEDED 
@@ -303,7 +309,7 @@ def condense_mask_regions(ld_sites,tb_sites):
             #covered all 6 possible positions of the two regions
             '''
             DEBUG
-            print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+            logging.debug('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
             '''
 
         #possible bug: prev overlaps with one list the first time the other list expires
@@ -373,7 +379,7 @@ def squish(lines):
         newLines.append(prev)  
     else:
         #prev should probably not be None
-        print('no lines in file?')
+        logging.warning('no lines in file?')
     #should i overwrite lines variable for storage consideration?
     return newLines
 
@@ -381,6 +387,7 @@ def vcf_to_diff(vcf_file):
     '''
     takes a single sample vcf and converts to diff format
     NOTE: this function makes the assumption that incoming diff file is genotyped as diploid
+          (it's common practice to call variants on TB as if it were diploid)
     Args: 
         vcf_file: uncompressed single sample vcf 
     Outputs:
@@ -409,15 +416,16 @@ def vcf_to_diff(vcf_file):
 
                     # for all lines with multiple alt alleles
                     #if len(line[4].split(','))>1:
-                    #    print('OPTIONS!!!!', line[4].split(','))
+                    #    logging.debug('OPTIONS!!!!', line[4].split(','))
 
                     #combine ref allele and alt alleles
                     alleles = [line[3]] + line[4].split(',')
                     
                     #if genotype is not reference allele
                     if var != '0/0':
-                        #print('line',line)
-                        #print('alleles', alleles)
+                        #logging.debug("Not a reference allele")
+                        #logging.debug('line',line)
+                        #logging.debug('alleles', alleles)
 
                         #split genotype to check for heterozygosity
                         genos = var.split('/')
@@ -427,15 +435,17 @@ def vcf_to_diff(vcf_file):
                             #missing += int(len(line[3]))
                             line[4] = '-'
                             line [-1] = '1'
-                            #print('missing', line)
+                            #logging.debug("Missing info")
+                            #logging.debug('missing', line)
 
                         #assumes diploid genotype
                         #if genotype is heterozygous and reference position is not and indel
                         #NOTE: may need to change this later when indels are not ignored by usher 
                         elif genos[0]!= genos[1] and len(line[3])==1:
-                            #print('HETERO', line)
-                            #print('genos', genos)
-                            #print('alleles', alleles)
+                            #logging.debug("Hetero")
+                            #logging.debug('HETERO', line)
+                            #logging.debug('genos', genos)
+                            #logging.debug('alleles', alleles)
                             
                             IUPAC = {
                                 'R':['A','G'], 
@@ -448,27 +458,27 @@ def vcf_to_diff(vcf_file):
                             
                             #generated sorted list of both alleles genotyped 
                             vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
-                            print('vars', vars)
+                            logging.debug('vars', vars)
                             #if the heterozygous position is a SNP, replace with an IUPAC symbol
                             if len(vars[0])==len(vars[1])==1:
-                                print('SNP')
+                                logging.debug('SNP')
                                 for key in IUPAC:
                                     if IUPAC[key] == vars:
-                                        print('IUPAC key', key)
+                                        logging.debug('IUPAC key', key)
                                         #alts = line[4].split(',')
                                         #alt = alts[int(var)-1]
                                         line[4] = key
                                         line[-1] = '1'
-                                        print('line after ', line)
+                                        logging.debug('line after ', line)
                                         break
 
                             ##if one of the vars is an indel, mask the position       
                             else:
-                                print('one of alleles is an indel, mask the ref for clarity')
-                                print(line)
+                                logging.info('one of alleles is an indel, mask the ref for clarity')
+                                logging.debug(line)
                                 line[4] = '-'
                                 line [-1] = '1'
-                                print('after', line)
+                                logging.debug('after', line)
 
                         #if reference is an indel and/or genotype is homozygous
                         else: 
@@ -656,8 +666,8 @@ def check_prev_line(prev, line):
 
     '''
     #DEBUG
-    print('masking prev ', prev)
-    print('masking line', line)
+    logging.debug('masking prev ', prev)
+    logging.debug('masking line', line)
     '''
 
     
@@ -668,87 +678,83 @@ def check_prev_line(prev, line):
     line_e = line_s + int(line[2])
 
     '''
-    DEBUG PRINTS
-    print('prev', prev)
-    print('line', line)
-    print('prev', prev_s, prev_e, 'line', line_s, line_e)
+    DEBUG logging.debugS
+    logging.debug('prev', prev)
+    logging.debug('line', line)
+    logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
     '''
 
     if line_s >= prev_s and line_e <= prev_e:
         overlap = True
-        print('Full OVERLAP!!!!!')
-        print('prev', prev_s, prev_e, 'line', line_s, line_e)
+        logging.info('Full OVERLAP!!!!!')
+        logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
     elif line_s >= prev_s and line_s < prev_e and line_e >= prev_e:
         overlap = True 
 #<<<<<<< fix_mismatch_overlaps
-        print('right overlap vcftodiff', 'prev', prev_s, prev_e, 'line', line_s, line_e)
+        logging.debug('right overlap vcftodiff', 'prev', prev_s, prev_e, 'line', line_s, line_e)
         
-        #print('prev', prev)
-        #print('line', line)
+        #logging.debug('prev', prev)
+        #logging.debug('line', line)
         #if line_s == prev_e and line[-1]=='1':
 
         #if line[0] and prev[0] are the same, we can squish these, otherwise, ignore 
         #squish later if necessary 
         if line_s == prev_e:
-            print('start to end', line, prev)
+            logging.debug('start to end', line, prev)
             '''            
         #=======
-        print('right overlap vcftodiff', 'prev', prev, prev_s, prev_e, 'line', line, line_s, line_e)
+        logging.debug('right overlap vcftodiff', 'prev', prev, prev_s, prev_e, 'line', line, line_s, line_e)
         #if prev[0] != line[0]:
-        #    print('masking prev ', prev)
-        #    print('masking line', line)
-        #print('prev', prev)
-        #print('line', line)
-        print('prev', prev_s, prev_e, 'line', line_s, line_e, line)
+        #    logging.debug('masking prev ', prev)
+        #    logging.debug('masking line', line)
+        #logging.debug('prev', prev)
+        #logging.debug('line', line)
+        logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e, line)
         if line_s == prev_e and line[-1]=='1':
-            #print('SNP')
+            #logging.debug('SNP')
             #>>>>>>> main
             '''
             overlap = False
 
         elif line_s < prev_e and line_e>prev_e:
-            print('truly right overlap', 'prev', prev, 'line', line)
+            logging.debug('truly right overlap', 'prev', prev, 'line', line)
 
             #COME BACK HERE WEDS!!!!!!!!!!! need to figure out how to add two lines 
             if prev[0] == '-' and line[0] != '-':
-                print('masking needed', prev)
-                print('masking needed', line)
+                logging.debug('masking needed', prev)
+                logging.debug('masking needed', line)
                 line[1] = str(prev_e)
                 line[2] = str(line_e-prev_e)
-                print('newline', line)
+                logging.debug('newline', line)
                 newline = line
 
             elif prev[0] != '-' and line[0] == '-':
-                print('masking needed complicated', prev)
-                print('masking needed complicated', line)
+                logging.debug('masking needed complicated', prev)
+                logging.debug('masking needed complicated', line)
 
                 
             elif prev[0] == line[0]:
-                print('combine!')
+                logging.debug('combine!')
                 prev[2] = str(line_e-prev_s)
-                print('prev after ', prev)
+                logging.debug('prev after ', prev)
                 change = prev
             else:
-                print('BAD NEWS', 'line',line, 'prev', prev )
+                logging.warning('BAD NEWS', 'line',line, 'prev', prev )
             
 
             #change = line
         #elif line_s == prev_e and line[-1]!='1':
         #    overlap = True
-        #    print('need to change this!!!', 'prev', prev, 'line', line)
-        #    print('prev')
+        #    logging.debug('need to change this!!!', 'prev', prev, 'line', line)
+        #    logging.debug('prev')
         else:
-            print('what is happening?', prev, line)
-            print('should be?',f'{line_e}-{prev_s}=',line_e-prev_s)
-            print('what is ?', (line[2]), '-', (prev[1]))
-            print('prev', prev)
-            #prev[2] = str(int(line[2])-int(prev[1]))
+            # previously there were arthimatic errors, but this should be fine now
             prev[2] = str(line_e-prev_s)
-            print('prev after ', prev)
+            logging.debug('prev after ', prev)
             change = prev
     #elif line_s <= prev_s and line_e >= prev_s:
     if newline != None:
-        print('overlap', overlap, 'change', change, 'newlin',newline)
+        logging.debug('overlap', overlap, 'change', change, 'newlin',newline)
     return overlap, change, newline
 
 #def interpret_overlap()  
@@ -773,7 +779,8 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
     #    masks = tb_masks
     masks = ld
     masks_key = sorted(ld.keys())
-    #print('masks',masks_key, masks)
+    logging.info("Masking the diff file...")
+    logging.debug('masks', masks_key, masks)
     
     # iterate through all masks and lines one time and combine things as needed
     masks_ind = 0
@@ -793,26 +800,26 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
             line_end = int(lines[lines_ind][1])+int(lines[lines_ind][2])
 
             '''
-            DEBUG PRINTS
-            print('mask_start', mask_start, type(mask_start))
-            print('mask_end', mask_end, type(mask_end))
-            print('line',line)
-            print('line_start', line_start, type(line_start))
-            print('line end', line_end, type(line_end))
+            DEBUG logging.debugS
+            logging.debug('mask_start', mask_start, type(mask_start))
+            logging.debug('mask_end', mask_end, type(mask_end))
+            logging.debug('line',line)
+            logging.debug('line_start', line_start, type(line_start))
+            logging.debug('line end', line_end, type(line_end))
             '''
 
             if line_start >= mask_start and line_end <= mask_end:
                 #line and mask fully overlap with line inside
-                #print('full overlap: line inside')
+                #logging.debug('full overlap: line inside')
                 
                 if prev != None:
                     overlap,change,newline = check_prev_line(prev, ['-', mask_start, mask_end-mask_start])
                     if overlap == True and change != None:
-                        print('change', change)
+                        logging.debug('change', change)
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        print('append!!!!', newline)
+                        logging.debug('append!!!!', newline)
                 if prev == None or overlap == False:
                     all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
 
@@ -826,11 +833,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 if prev != None:
                     overlap,change, newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
-                        print('change', change)
+                        logging.debug('change', change)
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        print('append!!!!', newline)
+                        logging.debug('append!!!!', newline)
                 if prev == None or overlap == False:
                     
                     all_lines.append(line)
@@ -841,37 +848,37 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 #?
                 if line_end <= mask_start:
                     #no overlap, line completely to left
-                    #print(f'line{lines_ind} is below mask{masks_ind}')
+                    #logging.debug(f'line{lines_ind} is below mask{masks_ind}')
                     
                     if prev != None:
                         overlap,change,newline = check_prev_line(prev, line)
                         if overlap == True and change != None:
-                            print('change', change)
-                            print('before',all_lines[-1])
+                            logging.debug('change', change)
+                            logging.debug('before',all_lines[-1])
                             #change does this help?
                             
                             all_lines[-1][2] = change[2]
-                            print('after',all_lines[-1])
+                            logging.debug('after',all_lines[-1])
                         if newline != None:
                             all_lines.append(newline)
-                            print('append!!!!', newline)
+                            logging.debug('append!!!!', newline)
                     if prev == None or overlap == False:
                         all_lines.append(line)
                     lines_ind += 1
                 
                 elif line_end > mask_start:
                     #if line overlaps mask on the left
-                    #print('left overlap')
-                    #print('line',line_start, line_end, 'tb', mask_start, mask_end)
+                    #logging.debug('left overlap')
+                    #logging.debug('line',line_start, line_end, 'tb', mask_start, mask_end)
                     
                     if prev != None:
                         overlap,change,newline = check_prev_line(prev, line)
                         if overlap == True and change != None:
-                            print('change', change)
+                            logging.debug('change', change)
                             #all_sites[change[0]] = change[1]
                         if newline != None:
                             all_lines.append(newline)
-                            print('append!!!!', newline)
+                            logging.debug('append!!!!', newline)
                     if prev == None or overlap == False:
                         all_lines.append(['-', str(line_start), str(mask_end-line_end)])
                     masks_ind += 1
@@ -879,17 +886,17 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
 
             elif line_start >= mask_end:
                 #if line is completely to the right of mask
-                #print('no overlap', 'line', line_start, line_end, 'mask', mask_start, mask_end)
+                #logging.debug('no overlap', 'line', line_start, line_end, 'mask', mask_start, mask_end)
 
                 if prev != None:
                     #change here
                     overlap,change, newline = check_prev_line(prev, ['-',mask_start,mask_end-mask_start])
                     if overlap == True and change != None:
-                        print('change', change)
+                        logging.debug('change', change)
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        print('append!!!!', newline)
+                        logging.debug('append!!!!', newline)
                 if prev == None or overlap == False:
                     all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
                 masks_ind += 1
@@ -897,16 +904,16 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
             #need to figure out whatn happens if snp is sticking out 
             elif line_start < mask_end and line_end > mask_end:
                 #line overlaps mask on the right 
-                #print('right over lap','line',line_start, line_end, 'mask', mask_start, mask_end)
+                #logging.debug('right over lap','line',line_start, line_end, 'mask', mask_start, mask_end)
 
                 if prev != None:
                     overlap,change,newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
-                        print('change', change)
+                        logging.debug('change', change)
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        print('append!!!!', newline)
+                        logging.debug('append!!!!', newline)
                 if prev == None or overlap == False:
                 
                     all_lines.append(['-', str(mask_start), str(line_end-mask_start)])
@@ -914,20 +921,20 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 lines_ind += 1
 
             else:
-                print('other', 'what else could happen?')
-                #print('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                logging.debug('other', 'what else could happen?')
+                #logging.debug('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
                 #all_sites[tb_start]
 
 
-                #print(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
-                #print('ld', ld_start, ld_end)
-                #print('tb', tb_start, tb_end)
-            #print('tb',tb_keys[tb_keys_ind], tb_sites[tb_keys[tb_keys_ind]])
-            #print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+                #logging.debug(f'ld{ld_keys_ind} is not below tb{tb_keys_ind}')
+                #logging.debug('ld', ld_start, ld_end)
+                #logging.debug('tb', tb_start, tb_end)
+            #logging.debug('tb',tb_keys[tb_keys_ind], tb_sites[tb_keys[tb_keys_ind]])
+            #logging.debug('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
         
         elif masks_ind >= len(masks_key) and lines_ind < len(lines):
             #after mask list is completely read
-            print('no more masks, lines only')
+            logging.info('no more masks, lines only')
 
             line = lines[lines_ind]
             line_start = line[1]
@@ -937,20 +944,20 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     overlap,change,newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
                         #do i need to change this?
-                        print('change!!!!!', change)
+                        logging.debug('change!!!!!', change)
                         #all_lines[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        print('append!!!!', newline)
+                        logging.debug('append!!!!', newline)
             if prev == None or overlap == False:
-                print('add as is!!!!!!', 'line', line, 'prev', prev )
+                logging.debug('add as is!!!!!!', 'line', line, 'prev', prev )
                 all_lines.append(line)
             lines_ind += 1
 
 
         elif lines_ind >= len(lines) and masks_ind < len(masks_key):
             #after lines list is completely read and masks are left 
-            print('no more lines, masks only')
+            logging.info('no more lines, masks only')
 
             mask_start = masks_key[masks_ind]
             mask_end =  masks[mask_start]
@@ -960,14 +967,14 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 overlap,change,newline = check_prev_line(prev, ['-', str(mask_start), str(mask_end-mask_start)])
                 if overlap == True and change != None:
                     #do i need to change this?
-                    print('change!!!!!', change)
+                    logging.debug('change!!!!!', change)
                     #all_lines[change[0]] = change[1]
                 if newline != None:
                     all_lines.append(newline)
-                    print('append!!!!', newline)
+                    logging.debug('append!!!!', newline)
             if prev == None or overlap == False:
                 #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])    
-                print('add mask as is!!!!!!', 'mask', mask_start, mask_end, 'prev', prev )
+                logging.debug('add mask as is!!!!!!', 'mask', mask_start, mask_end, 'prev', prev )
                 all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
                 
 
@@ -976,18 +983,18 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
         
         
         prev = all_lines[-1]
-        print('prev', prev)
+        logging.debug('prev', prev)
 
     #need to add final prev?  
-    print('final prev', prev)
+    logging.debug('final prev', prev)
     return all_lines
 
 def mask2ref(lines, tb_masks):
-    print(tb_masks)
+    logging.debug(tb_masks)
     final = [lines[0]]
     #editing thought: would likely benefit from being a list rather than a dictionary 
     tb_keys = sorted(tb_masks.keys())
-    print('all lines', lines)
+    logging.debug('all lines', lines)
     tb_keys_ind = 0
     lines_ind = 1
     cont = 0
@@ -1001,7 +1008,7 @@ def mask2ref(lines, tb_masks):
             tb_end =  tb_masks[tb_keys[tb_keys_ind]]
             line_start = int(lines[lines_ind][1])
             line_end = line_start+int(lines[lines_ind][2])
-            print('tb start', tb_start, 'tb_end', tb_end, 'line start', line_start, 'line end', line_end)
+            logging.debug('tb start', tb_start, 'tb_end', tb_end, 'line start', line_start, 'line end', line_end)
 
             if line_end <= tb_start:
                 '''
@@ -1022,38 +1029,38 @@ def mask2ref(lines, tb_masks):
                 lines_ind += 1
             
             elif line_start >= tb_end:
-                print('dont add to final yet')
+                logging.debug('dont add to final yet')
                 tb_keys_ind += 1
                 #final.append(lines[lines_ind])
             
             elif line_start >= tb_start and line_end <= tb_end:
-                print('full overlap')
+                logging.debug('full overlap')
                 lines_ind += 1
             
             elif line_start < tb_start and line_end > tb_end:
-                print('full overlap OPPOSITE', 'line',lines[lines_ind], 'tb', tb_start, tb_end)
+                logging.debug('full overlap OPPOSITE', 'line',lines[lines_ind], 'tb', tb_start, tb_end)
                 #first segment of line before TB mask
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
                 #update line after first segment AND TB mask
                 lines[lines_ind][1] = str(tb_end)
                 lines[lines_ind][2] = str(line_end-tb_end)
-                print('new line', new_line)
-                print('update line', lines[lines_ind])
+                logging.debug('new line', new_line)
+                logging.debug('update line', lines[lines_ind])
                 final.append(new_line)
                 tb_keys_ind += 1
 
             elif line_start <= tb_start and line_end > tb_start and line_end <= tb_end:
-                print('left overlap')
+                logging.debug('left overlap')
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
-                print('old line', lines[lines_ind])
-                print('new line', new_line)
+                logging.debug('old line', lines[lines_ind])
+                logging.debug('new line', new_line)
                 final.append(new_line)
                 lines_ind += 1
 
             elif line_start >= tb_start and line_start < tb_end and line_end > tb_end:
-                print('right overlap')
+                logging.debug('right overlap')
                 new_line = [lines[lines_ind][0], str(tb_end), str(line_end-tb_end)]
-                print('new line', new_line)
+                logging.debug('new line', new_line)
                 final.append(new_line)
                 tb_keys_ind += 1
                 lines_ind += 1
@@ -1061,16 +1068,16 @@ def mask2ref(lines, tb_masks):
 
 
             else:
-                print('overlap?' )
+                logging.debug('overlap?' )
         
 
         elif tb_keys_ind == len(tb_keys) and lines_ind < len(lines):
-            print(lines[lines_ind])
+            logging.debug(lines[lines_ind])
             final.append(lines[lines_ind])
             lines_ind += 1
 
         #elif tb_keys_ind < len(tb_keys) and lines_ind == len(lines):
-        #    print(lines[lines_ind])
+        #    logging.debug(lines[lines_ind])
         #    final.append(lines[lines_ind])
         #    lines_ind += 1
 
@@ -1145,7 +1152,7 @@ def mask2ref(lines, tb_masks):
             #covered all 6 possible positions of the two regions
             '''
             DEBUG
-            print('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+            logging.debug('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
             '''
 
         #possible bug: prev overlaps with one list the first time the other list expires
@@ -1173,8 +1180,8 @@ def mask2ref(lines, tb_masks):
         #cont += 1
         #if cont == 1000:
         #    break
-        print('end', 'lines', len(lines), 'tb', len(tb_keys))
-        print('tb', tb_keys_ind, 'lines', lines_ind)
+        logging.debug('end', 'lines', len(lines), 'tb', len(tb_keys))
+        logging.debug('tb', tb_keys_ind, 'lines', lines_ind)
 
     
     #return all_sites
@@ -1222,7 +1229,7 @@ def missing_check(lenref, ld):
 
     #rules out samples that could never pass quality check no matter what 
     #if missing_count/lenref > cc:
-    #    print('fail')
+    #    logging.error('fail')
     #    return False, missing_count/lenref
 
     #return all samples that couldn't fail quality check no matter what 
@@ -1230,7 +1237,7 @@ def missing_check(lenref, ld):
     #    return True, missing_count/lenref
 
     #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
-    #print('pass')
+    #logging.debug('pass')
     return missing_count/lenref
     
 
@@ -1241,7 +1248,6 @@ with gzip.open(vcf, 'r') as test:
     try:
         test.read(1)
     except OSError:
-        #print('not binary'
         binary = False
 
 if binary == True:
@@ -1260,8 +1266,8 @@ else:
     
 masks = mask_TB(tbmf)
 #this is not parallelized, the more samples in the vcf the longer this will take
-#print(files)
-#print(masks)
+#logging.debug(files)
+#logging.debug(masks)
 
 for f in files:
     files[f].close()
@@ -1274,7 +1280,7 @@ for f in files:
         ld = None
 
     sample = os.path.basename(files[f].name)[:-4]
-    print('sample', sample)
+    logging.info('Working on sample', sample)
     filepath = files[f].name
     os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
     os.system(f"rm {filepath}")
@@ -1289,41 +1295,13 @@ for f in files:
 
     all_lines = mask_and_write_diff(ld, masks,lines, samps)
     
-    print('MASK2REF')
+    logging.info('MASK2REF')
     final_lines = mask2ref(all_lines, masks)
 
-
-
-    with open(f'{wd}{sample}.txt','w') as o:
-        o.write(f'{sample}\t{error}\t{cd}\n')
+    with open(f'{wd}{sample}.report','w') as o:
+        o.write(f'{sample}.diff\t{error}\t{cd}\n')
     with open(f'{wd}{sample}.diff','w') as o:
         for line in final_lines:
             o.write('\t'.join(line)+'\n')
     
-    
-
-   
-    
-
-#SCRIPT ENDS HERE
-
-
-  
-
-
-
-
-    
-    
-
-    
-
-    
-
-
-
-
-
-
-
-
+logging.info("Finished")
