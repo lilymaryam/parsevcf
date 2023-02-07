@@ -34,14 +34,13 @@ task make_mask_and_diff {
 		bedtools genomecov -ibam sorted_u_~{basestem}.bam > histogram.txt
 	fi
 	mkdir outs
-	# commit 2c7c8c4c2d57ac7e5f63c66d2922d4b50dff9322
-	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.0.3/vcf_to_diff_script.py
+	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
 	python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	>>>
 
 	runtime {
 		cpu: cpu
-		docker: "ashedpotatoes/sranwrp:1.0.7"
+		docker: "ashedpotatoes/sranwrp:1.1.6"
 		disks: "local-disk " + finalDiskSize + " HDD"
 		maxRetries: "${retries}"
 		memory: "${memory} GB"
@@ -81,14 +80,14 @@ task make_diff {
 	command <<<
 		set -eux pipefail
 		mkdir outs
-		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/main/vcf_to_diff_script.py
+		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
 		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{cf} -cd ~{cd}
 	>>>
 
 	runtime {
 		cpu: cpu
 		disks: "local-disk " + finalDiskSize + " SSD"
-		docker: "ashedpotatoes/sranwrp:1.0.7"
+		docker: "ashedpotatoes/sranwrp:1.1.6"
 		maxRetries: "${retries}"
 		memory: "${memory} GB"
 		preemptible: "${preempt}"
