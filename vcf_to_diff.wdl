@@ -19,23 +19,23 @@ task make_mask_and_diff {
 		Int memory   = 32
 		Int preempt  = 1
 	}
-	String basestem = basename(bam, ".bam")
+	String basename_bam = basename(bam, ".bam")
 	Int finalDiskSize = ceil(size(bam, "GB")) + addldisk
 	
 	command <<<
 	set -eux pipefail
 	cp ~{bam} .
-	samtools sort -u ~{basestem}.bam > sorted_u_~{basestem}.bam
-	bedtools genomecov -ibam sorted_u_~{basestem}.bam -bga | \
+	samtools sort -u ~{basename_bam}.bam > sorted_u_~{basename_bam}.bam
+	bedtools genomecov -ibam sorted_u_~{basename_bam}.bam -bga | \
 		awk '$4 < ~{min_coverage}' > \
-		~{basestem}_below_~{min_coverage}x_coverage.bedgraph
+		~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph
 	if [[ "~{histograms}" = "true" ]]
 	then
-		bedtools genomecov -ibam sorted_u_~{basestem}.bam > histogram.txt
+		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
 	mkdir outs
 	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
-	python3 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	python3 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	>>>
 
 	runtime {
@@ -52,10 +52,9 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File diff = glob("outs/*.diff")[0]
-		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
-		File mask_file = glob("*coverage.bedgraph")[0]
-		File report = glob("outs/*.report")[0]
+		File diff = "outs/"+basename_bam+".diff"
+		File report = "outs/"+basename_bam+".report"
+		File mask_file = basename_bam+"_below_"+min_coverage+"x_coverage.bedgraph"
 		File? histogram = "histogram.txt"
 	}
 }
@@ -75,6 +74,7 @@ task make_diff {
 		Int preempt	= 1
 	}
 	# estimate disk size
+	String basename = basename(vcf)
 	Int finalDiskSize = 2*ceil(size(vcf, "GB")) + addldisk
 
 	command <<<
@@ -98,8 +98,7 @@ task make_diff {
 	}
 
 	output {
-		File diff = glob("outs/*.diff")[0]
-		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
-		File report = glob("outs/*.txt")[0]
+		File diff = "outs/"+basename+".diff"
+		File report = "outs/"+basename+".report"
 	}
 }
