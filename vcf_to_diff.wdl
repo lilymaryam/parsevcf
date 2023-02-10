@@ -36,6 +36,7 @@ task make_mask_and_diff {
 	mkdir outs
 	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
 	python3 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	ls -lha
 	>>>
 
 	runtime {
