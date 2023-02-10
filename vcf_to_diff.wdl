@@ -83,6 +83,7 @@ task make_diff {
 		mkdir outs
 		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
 		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{cf} -cd ~{cd}
+		ls -lha outs/
 	>>>
 
 	runtime {
