@@ -33,9 +33,8 @@ task make_mask_and_diff {
 	then
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
-	mkdir outs
 	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
-	python3 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	python3 vcf_to_diff_script.py -v ~{vcf} -d . -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	ls -lha
 	>>>
 
@@ -53,8 +52,8 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File diff = "outs/"+basename_bam+".diff"
-		File report = "outs/"+basename_bam+".report"
+		File diff = basename_bam+".diff"
+		File report = basename_bam+".report"
 		File mask_file = basename_bam+"_below_"+min_coverage+"x_coverage.bedgraph"
 		File? histogram = "histogram.txt"
 	}
