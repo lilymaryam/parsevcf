@@ -20,6 +20,7 @@ task make_mask_and_diff {
 		Int preempt  = 1
 	}
 	String basename_bam = basename(bam, ".bam")
+	String basename_vcf = basename(vcf, ".vcf")
 	Int finalDiskSize = ceil(size(bam, "GB")) + addldisk
 	
 	command <<<
@@ -52,8 +53,8 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File diff = basename_bam+".diff"
-		File report = basename_bam+".report"
+		File diff = basename_vcf+".diff"
+		File report = basename_vcf+".report"
 		File mask_file = basename_bam+"_below_"+min_coverage+"x_coverage.bedgraph"
 		File? histogram = "histogram.txt"
 	}
