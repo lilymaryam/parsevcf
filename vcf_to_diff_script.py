@@ -1325,7 +1325,7 @@ for f in files:
     filepath = files[f].name
     if args.tag_filter:
         os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
-        os.system(f"rm {filepath}")
+        os.remove(filepath)
         filepath = f"{filepath}.filt"
     if ld != None:
         #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
