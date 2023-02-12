@@ -1271,12 +1271,13 @@ def missing_check(lenref, ld):
 
 #you can  assume sane people will end their gzipped files with .gz.
 #and it erroring if they don't is perfectly acceptable. 
-if vcf.endswith(".vcf"):
+if vcf.endswith('.vcf'):
     binary = False
-if vcf.endswith('.vcf.gz'):
+elif vcf.endswith('.vcf.gz'):
     binary = True
 else:
     logging.error("Unsupported file extension for input- use '.vcf' or '.vcf.gz'.")
+    logging.debug(f"File name read: {vcf}. Extension detected: {vcf.split('.')[-1]}")
     exit(1)
 
 try:
