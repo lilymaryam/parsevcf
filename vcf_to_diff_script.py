@@ -47,13 +47,12 @@ if wd[-1] != '/':
 if not os.path.exists(wd):
     os.mkdir(wd)
 
-#Functions                        
 def find_snps(line):
     '''
     for lines where len(ref)==len(alt), look for snps instead of processing as one large chunk 
-    args: 
+    Args: 
         line: a list containg the line from the VCF
-    output:
+    Returns:
         lines: a list of lists of lines to be added to the diff file 
     '''
     ref = line[3]
@@ -75,7 +74,7 @@ def process_dels(line):
     for lines where len(ref) > 1 AND len(alt) == 1 (currently deletions and missing data are all converted to '-')
     Args: 
         line: a list containing info from a line of the VCF
-    output:
+    Returns:
         l: a list containing the diff-formatted version of the deletion
     '''
     ref = line[3]
@@ -121,7 +120,7 @@ def mask_TB(tbmf):
     note: bed coverage file is 0 indexed, so 1 added to everything 
     Args:
         tbmf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
-    Output:
+    Returns:
         tb_sites: dictionary where key is start of masked region (1 index) and value is end of masked region (not inclusive)
     '''
     tb_sites = {}
@@ -148,7 +147,7 @@ def mask_low_depth(cf, cd):
         for line in cf:
             #might need to delete or change this
             #for currect bed coverage file 
-            if line.startswith(refname): #hardcoded chromosome name- naughty.
+            if line.startswith(refname):
                 line = line.strip().split()
                 #re-index to match VCF
                 line[1] = str(int(line[1])+1)
@@ -184,7 +183,7 @@ def check_prev_mask(prev, line):
     Args:
         prev: a list of the start and stop of the previously added mask region 
         line: a list of the start and stop of the to-be-added mask region
-    Output:
+    Returns:
         overlap: a boolean meant to indicate if prev and line overlap
         change: a list containing important information for updating the prev value
     '''
@@ -223,7 +222,7 @@ def condense_mask_regions(ld_sites,tb_sites):
     Args: 
         ld_sites: a dictionary containing low-depth sites to be masked
         tb_sites: a dictionary containing universal masking sites 
-    Output:
+    Returns:
         all_sites: a dictionary containing all masking sites from both universal and low-depth
     '''
     #editing thought: would likely benefit from being a list rather than a dictionary 
@@ -571,7 +570,7 @@ def count_samples(vcf):
     '''
     opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
     *note that VCF is 1-indexed and will remain as such
-    args: 
+    Args: 
         vcf: uncompressed VCF containing >=1 samples
     returns:
         lenRow: an int that determines number of columns in VCF (including metadata)
@@ -595,7 +594,7 @@ def count_samples_bin(vcf):
     '''
     opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
     *note that VCF is 1-indexed and will remain as such
-    args: 
+    Args: 
         vcf: compressed VCF containing >=1 samples
     returns:
         lenRow: an int that determines number of columns in VCF (including metadata)
@@ -786,12 +785,12 @@ def check_prev_line(prev, line):
 def mask_and_write_diff(ld, tb_masks, lines, samps):
     '''
     iterate through masking regions and lines of diff file to mask positions
-    args:
+    Args:
         ld: a dictionary of low depth coverage regions 
         tb_masks: a dictionary of universally masked regions
         lines: a list of diff-formatted lines 
         samps: a list of sample names from the VCF
-    output:
+    Returns:
         all_lines: a list of diff-formatted lines including all of the masked regions
     '''
     
