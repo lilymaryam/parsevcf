@@ -1271,8 +1271,16 @@ def missing_check(lenref, ld):
 
 #you can  assume sane people will end their gzipped files with .gz.
 #and it erroring if they don't is perfectly acceptable. 
+if vcf.endswith(".vcf"):
+    binary = False
+if vcf.endswith('.vcf.gz'):
+    binary = True
+else:
+    logging.error("Unsupported file extension for input- use '.vcf' or '.vcf.gz'.")
+    exit(1)
+
 try:
-    if vcf[:-3] == '.gz':
+    if binary:
         lenRow, samps = count_samples_bin(vcf)
     else:
         lenRow, samps = count_samples(vcf)
@@ -1282,9 +1290,8 @@ except IndexError:
 
 #be careful w dictionaries!!!
 files = make_files(samps, wd)
-
 try:
-    if vcf[:-3] == '.gz':
+    if binary:
         read_VCF_bin(vcf, files)
     else:
         read_VCF(vcf, files)
