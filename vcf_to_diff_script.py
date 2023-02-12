@@ -1271,23 +1271,27 @@ def missing_check(lenref, ld):
 
 #you can  assume sane people will end their gzipped files with .gz.
 #and it erroring if they don't is perfectly acceptable. 
-# try:
-if vcf[:-3] == '.gz':
-    lenRow, samps = count_samples_bin(vcf)
-else:
-    lenRow, samps = count_samples(vcf)
-# except:
-#     logging.error("Fail to read input vcf- check formatting.")
-#     sys.exit(1)
+try:
+    if vcf[:-3] == '.gz':
+        lenRow, samps = count_samples_bin(vcf)
+    else:
+        lenRow, samps = count_samples(vcf)
+except IndexError:
+    logging.error("Fail to read input vcf columns- check formatting.")
+    sys.exit(1)
 
 #be careful w dictionaries!!!
 files = make_files(samps, wd)
 
-if vcf[:-3] == '.gz':
-    read_VCF_bin(vcf, files)
-else:
-    read_VCF(vcf, files)
-    
+try:
+    if vcf[:-3] == '.gz':
+        read_VCF_bin(vcf, files)
+    else:
+        read_VCF(vcf, files)
+except IndexError:
+    logging.error("Fail to read input vcf data- check formatting.")
+    sys.exit(1)
+
 if tbmf != None:
     masks = mask_TB(tbmf)
 else:
