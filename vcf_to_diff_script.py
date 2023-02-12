@@ -1,40 +1,58 @@
 import os
+import sys
 import argparse
 import gzip
 import logging
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Tool for converting VCF to diff formats.")
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
-parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
+parser.add_argument('-d', '--working_directory', required=False, default='./', type=str, help='Output directory for storing intermediate and sample-level outputs.')
+parser.add_argument('-mf', '--maskfile', required=False, type=str, help='Masking data in BED format.')
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
-parser.add_argument('-l', '--logging', required=False, default=False, type=bool, help="if True, logging.debug verbose logging to stdout, else suppress most logging")
-
+parser.add_argument("-ha", "--haploid", action='store_true', help='Indicate whether the VCF is diploid or haploid. Default is diploid.')
+#https://stackoverflow.com/questions/14097061/easier-way-to-enable-verbose-logging
+parser.add_argument(
+    '-D', '--debug',
+    help="Pring debugging statements.",
+    action="store_const", dest="loglevel", const=logging.DEBUG,
+    default=logging.WARNING,
+)
+parser.add_argument(
+    '-V', '--verbose',
+    help="Verbose output.",
+    action="store_const", dest="loglevel", const=logging.INFO,
+)
+parser.add_argument("-r", "--reference_length", default=4411532, type=int, help="Length of the reference genome. Default is 4411532 (length of the TB genome).")
+parser.add_argument("-rn", "--reference_name", default='NC_000962.3', help='Name of the reference genome. Default is "NC_000962.3", the TB reference.')
+parser.add_argument('-t', "--tag_filter", action='store_true', help='Use to filter GT tags in input vcfs. Requires BCFtools.')
+parser.add_argument("-sp", "--split_diff", action='store_true', help='Use to create separate .diff files for each of your input samples.')
+parser.add_argument("-mr", "--mask_report", action='store_true', help='Print sample level text reports of masking information.')
+parser.add_argument("-od", "--output_diff", help='Name of a compiled output diff.')
 args = parser.parse_args()
 vcf = args.VCF
 wd = args.working_directory
-tbmf = args.tb_maskfile
+tbmf = args.maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
-if args.logging is True:
-    logging.basicConfig(level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.WARNING)
+refname = args.reference_name
+logging.basicConfig(level=args.loglevel)
 
-len_ref = 4411532
+len_ref = args.reference_length
 
 #makes sure input path wont cause error
 if wd[-1] != '/':
     wd = wd+'/'
+#create the directory if it does not exist.
+if not os.path.exists(wd):
+    os.mkdir(wd)
 
-#Functions                        
 def find_snps(line):
     '''
     for lines where len(ref)==len(alt), look for snps instead of processing as one large chunk 
-    args: 
+    Args: 
         line: a list containg the line from the VCF
-    output:
+    Returns:
         lines: a list of lists of lines to be added to the diff file 
     '''
     ref = line[3]
@@ -56,7 +74,7 @@ def process_dels(line):
     for lines where len(ref) > 1 AND len(alt) == 1 (currently deletions and missing data are all converted to '-')
     Args: 
         line: a list containing info from a line of the VCF
-    output:
+    Returns:
         l: a list containing the diff-formatted version of the deletion
     '''
     ref = line[3]
@@ -102,7 +120,7 @@ def mask_TB(tbmf):
     note: bed coverage file is 0 indexed, so 1 added to everything 
     Args:
         tbmf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
-    Output:
+    Returns:
         tb_sites: dictionary where key is start of masked region (1 index) and value is end of masked region (not inclusive)
     '''
     tb_sites = {}
@@ -120,7 +138,7 @@ def mask_low_depth(cf, cd):
     Args: 
         cf: path to bed coverage file 
         cd: integer indicating coverage depth needed 
-    out:
+    Returns:
         ld_sites: dictionary of low-depth sites needing to be masked 
     '''
     ld_sites = {}
@@ -129,7 +147,7 @@ def mask_low_depth(cf, cd):
         for line in cf:
             #might need to delete or change this
             #for currect bed coverage file 
-            if line.startswith('NC_000962.3'):
+            if line.startswith(refname):
                 line = line.strip().split()
                 #re-index to match VCF
                 line[1] = str(int(line[1])+1)
@@ -153,7 +171,7 @@ def mask_low_depth(cf, cd):
                             prev = [int(line[1]), int(line[2])]
     #this conditional might need to be fixed if there are no low-coverage areas
     if ld_sites == {}:
-        raise Exception('coverage file has incorrect reference')
+        raise Exception('coverage file contains no low-coverage areas- check input.')
 
     return ld_sites
 
@@ -165,7 +183,7 @@ def check_prev_mask(prev, line):
     Args:
         prev: a list of the start and stop of the previously added mask region 
         line: a list of the start and stop of the to-be-added mask region
-    Output:
+    Returns:
         overlap: a boolean meant to indicate if prev and line overlap
         change: a list containing important information for updating the prev value
     '''
@@ -204,7 +222,7 @@ def condense_mask_regions(ld_sites,tb_sites):
     Args: 
         ld_sites: a dictionary containing low-depth sites to be masked
         tb_sites: a dictionary containing universal masking sites 
-    Output:
+    Returns:
         all_sites: a dictionary containing all masking sites from both universal and low-depth
     '''
     #editing thought: would likely benefit from being a list rather than a dictionary 
@@ -386,7 +404,7 @@ def squish(lines):
 def vcf_to_diff(vcf_file):
     '''
     takes a single sample vcf and converts to diff format
-    NOTE: this function makes the assumption that incoming diff file is genotyped as diploid
+    NOTE: this function makes the assumption that incoming vcf file is genotyped as diploid
           (it's common practice to call variants on TB as if it were diploid)
     Args: 
         vcf_file: uncompressed single sample vcf 
@@ -421,6 +439,11 @@ def vcf_to_diff(vcf_file):
                     #combine ref allele and alt alleles
                     alleles = [line[3]] + line[4].split(',')
                     
+                    if args.haploid:
+                        #make it a fake homozygous diploid. hack solution.
+                        #TODO: something smarter than this.
+                        var = var + "/" + var
+
                     #if genotype is not reference allele
                     if var != '0/0':
                         #logging.debug("Not a reference allele")
@@ -434,7 +457,7 @@ def vcf_to_diff(vcf_file):
                             #potentially useful to track number of positions with missing info 
                             #missing += int(len(line[3]))
                             line[4] = '-'
-                            line [-1] = '1'
+                            line[-1] = '1'
                             #logging.debug("Missing info")
                             #logging.debug('missing', line)
 
@@ -547,7 +570,7 @@ def count_samples(vcf):
     '''
     opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
     *note that VCF is 1-indexed and will remain as such
-    args: 
+    Args: 
         vcf: uncompressed VCF containing >=1 samples
     returns:
         lenRow: an int that determines number of columns in VCF (including metadata)
@@ -571,7 +594,7 @@ def count_samples_bin(vcf):
     '''
     opens VCF and determines how many samples it has (note that this assumes 9cols of metadata)
     *note that VCF is 1-indexed and will remain as such
-    args: 
+    Args: 
         vcf: compressed VCF containing >=1 samples
     returns:
         lenRow: an int that determines number of columns in VCF (including metadata)
@@ -762,12 +785,12 @@ def check_prev_line(prev, line):
 def mask_and_write_diff(ld, tb_masks, lines, samps):
     '''
     iterate through masking regions and lines of diff file to mask positions
-    args:
+    Args:
         ld: a dictionary of low depth coverage regions 
         tb_masks: a dictionary of universally masked regions
         lines: a list of diff-formatted lines 
         samps: a list of sample names from the VCF
-    output:
+    Returns:
         all_lines: a list of diff-formatted lines including all of the masked regions
     '''
     
@@ -777,11 +800,14 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
         
     #else:
     #    masks = tb_masks
-    masks = ld
-    masks_key = sorted(ld.keys())
-    logging.info("Masking the diff file...")
-    logging.debug('masks', masks_key, masks)
-    
+    if ld != None:
+        masks = ld
+        masks_key = sorted(ld.keys())
+        logging.info("Masking the diff file...")
+        logging.debug('masks', masks_key, masks)
+    else:
+        masks = {}
+        masks_key = masks.keys()
     # iterate through all masks and lines one time and combine things as needed
     masks_ind = 0
 
@@ -1243,32 +1269,47 @@ def missing_check(lenref, ld):
 
 #SCRIPT STARTS HERE
 
-binary = True
-with gzip.open(vcf, 'r') as test:
-    try:
-        test.read(1)
-    except OSError:
-        binary = False
-
-if binary == True:
-    lenRow, samps = count_samples_bin(vcf)
+#you can  assume sane people will end their gzipped files with .gz.
+#and it erroring if they don't is perfectly acceptable. 
+if vcf.endswith('.vcf'):
+    binary = False
+elif vcf.endswith('.vcf.gz'):
+    binary = True
 else:
-    lenRow, samps = count_samples(vcf)
+    logging.error("Unsupported file extension for input- use '.vcf' or '.vcf.gz'.")
+    logging.debug(f"File name read: {vcf}. Extension detected: {vcf.split('.')[-1]}")
+    exit(1)
+
+try:
+    if binary:
+        lenRow, samps = count_samples_bin(vcf)
+    else:
+        lenRow, samps = count_samples(vcf)
+except IndexError:
+    logging.error("Fail to read input vcf columns- check formatting.")
+    sys.exit(1)
 
 #be careful w dictionaries!!!
 files = make_files(samps, wd)
+try:
+    if binary:
+        read_VCF_bin(vcf, files)
+    else:
+        read_VCF(vcf, files)
+except IndexError:
+    logging.error("Fail to read input vcf data- check formatting.")
+    sys.exit(1)
 
-if binary == True:
-    read_VCF_bin(vcf, files)
-    
+if tbmf != None:
+    masks = mask_TB(tbmf)
 else:
-    read_VCF(vcf, files)
-    
-masks = mask_TB(tbmf)
+    #default to no masking.
+    masks = {}
 #this is not parallelized, the more samples in the vcf the longer this will take
 #logging.debug(files)
 #logging.debug(masks)
 
+final_lines = []
 for f in files:
     files[f].close()
 
@@ -1282,26 +1323,36 @@ for f in files:
     sample = os.path.basename(files[f].name)[:-4]
     logging.info('Working on sample', sample)
     filepath = files[f].name
-    os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
-    os.system(f"rm {filepath}")
-
-    #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
-    error = missing_check(len_ref, ld)
+    if args.tag_filter:
+        os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
+        os.remove(filepath)
+        filepath = f"{filepath}.filt"
+    if ld != None:
+        #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
+        error = missing_check(len_ref, ld)
+    else:
+        error = 'nomask'
 
     #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
     #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
-    lines = vcf_to_diff(f'{filepath}.filt')
-    os.system(f'rm {filepath}.filt')
+    lines = vcf_to_diff(filepath)
+    os.remove(filepath)
 
     all_lines = mask_and_write_diff(ld, masks,lines, samps)
     
     logging.info('MASK2REF')
-    final_lines = mask2ref(all_lines, masks)
+    filtered_lines = mask2ref(all_lines, masks)
+    if args.mask_report:
+        with open(f'{wd}{sample}.report.txt','w') as o:
+            o.write(f'{sample}.diff\t{error}\t{cd}\n')
+    if args.split_diff:
+        with open(f'{wd}{sample}.diff','w') as o:
+            for line in filtered_lines:
+                o.write('\t'.join(line)+'\n')
+    final_lines.extend(filtered_lines)
 
-    with open(f'{wd}{sample}.report','w') as o:
-        o.write(f'{sample}.diff\t{error}\t{cd}\n')
-    with open(f'{wd}{sample}.diff','w') as o:
-        for line in final_lines:
-            o.write('\t'.join(line)+'\n')
-    
+with open(args.output_diff,'w+') as of:
+    for line in final_lines:
+        print('\t'.join(line),file=of)
+
 logging.info("Finished")
