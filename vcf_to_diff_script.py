@@ -535,14 +535,20 @@ def make_files(samps,wd):
     '''
     files = {}
     for i in range(len(samps)):
+        logging.debug(f"samps[{i}] is {samps[i]}")
+    for i in range(len(samps)):
         s = samps[i]
+        logging.debug(f"samps[i] is {s}")
         #replace '/' in sample name with '-'
         if '/' not in s:
+            logging.debug(f"Opening {wd}{s}.vcf")
             file = open(f'{wd}{s}.vcf','w')
         else:
             newname = s.replace('/', '-')
+            logging.debug(f"Opening {wd}{newname}.vcf")
             file = open(f'{wd}{newname}.vcf','w')
-        files[i+9] = file
+        files[i+9] = file # sets the open file, not the path of the file
+        logging.debug(file)
     return files
                       
 def count_samples(vcf):
@@ -566,7 +572,11 @@ def count_samples(vcf):
                     samps = line[9:]
                     lenRow = len(line)
                     break
-    return lenRow, samps                           
+    try:
+        return lenRow, samps
+    except UnboundLocalError:
+        logging.error("Could not calculate lenrow")
+        exit 1                           
 
 
 def count_samples_bin(vcf):
@@ -644,7 +654,9 @@ def read_VCF_bin(vcf, files):
                 for f in files:
                     #sample specific data
                     parcel = [line[f]]
+                    logging.debug(f"parcel {parcel}")
                     newline = position+parcel
+                    logging.debug(f"newline {newline}")
                     #write position and sample data to file in VCF format 
                     files[f].write('\t'.join(newline)+'\n')
             else:
@@ -1255,10 +1267,8 @@ if __name__ == "__main__":
 
     logging.info("Reading vcf and masks...")
     if binary == True:
-        logging.debug("true")
         lenRow, samps = count_samples_bin(vcf)
     else:
-        logging.debug("false")
         lenRow, samps = count_samples(vcf)
 
     #be careful w dictionaries!!!
@@ -1276,8 +1286,8 @@ if __name__ == "__main__":
     #logging.debug(masks)
 
     for f in files:
-        logging.debug(f"For {f} in files")
         files[f].close()
+        logging.debug(f"For {f} in {files}")
 
         #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
         #find low coverage regions for each sample 
@@ -1286,12 +1296,13 @@ if __name__ == "__main__":
         else:
             ld = None
 
-        logging.debug(f"Name of this file is {files[f].name}")
         sample = os.path.basename(files[f].name)[:-4]
-        logging.info('Working on sample', sample)
+        logging.info(f'Working on sample {sample}')
         filepath = files[f].name
+        logging.debug(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
         os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
-        os.system(f"rm {filepath}")
+        
+        #os.system(f"rm {filepath}") # deleting the VCF isn't necessary
 
         #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
         error = missing_check(len_ref, ld)
