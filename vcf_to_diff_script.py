@@ -9,8 +9,7 @@ parser.add_argument('-d', '--working_directory', required=True, type=str, help='
 parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
-parser.add_argument('-l', '--logging', required=False, default=False, type=bool, help="if True, logging.debug verbose logging to stdout, else suppress most logging")
-parser.add_argument('-gz', '--gzipped', required=False, default=True, type=bool, help="if True, input VCF file is gzipped")
+parser.add_argument('-l', '--logging', required=False, default=True, type=bool, help="if True, logging.debug verbose logging to diff.log, else suppress most logging")
 
 args = parser.parse_args()
 vcf = args.VCF
@@ -19,7 +18,9 @@ tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
 if args.logging is True:
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(filename="diff.log", filemode='a', level=logging.DEBUG,
+        format="%(asctime)s %(name)s:%(levelname)s:%(message)s", datefmt="%I:%M:%S %p")
+    logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tcf={cf}\n\tcd={cd}\n\tl={args.logging}")
 else:
     logging.basicConfig(level=logging.WARNING)
 
@@ -1245,23 +1246,25 @@ def missing_check(lenref, ld):
 #SCRIPT STARTS HERE
 if __name__ == "__main__":
 
-# This block was previously used to test if VCFs were gzipped, but that's an input arg now
-#    binary = True
-#    with gzip.open(vcf, 'r') as test:
-#        try:
-#            test.read(1)
-#        except OSError:
-#            binary = False
+    binary = True
+    with gzip.open(vcf, 'r') as test:
+        try:
+            test.read(1)
+        except OSError:
+            binary = False
 
-    if gz == True:
+    logging.info("Reading vcf and masks...")
+    if binary == True:
+        logging.debug("true")
         lenRow, samps = count_samples_bin(vcf)
     else:
+        logging.debug("false")
         lenRow, samps = count_samples(vcf)
 
     #be careful w dictionaries!!!
     files = make_files(samps, wd)
 
-    if gz == True:
+    if binary == True:
         read_VCF_bin(vcf, files)
         
     else:
@@ -1273,6 +1276,7 @@ if __name__ == "__main__":
     #logging.debug(masks)
 
     for f in files:
+        logging.debug(f"For {f} in files")
         files[f].close()
 
         #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
@@ -1282,6 +1286,7 @@ if __name__ == "__main__":
         else:
             ld = None
 
+        logging.debug(f"Name of this file is {files[f].name}")
         sample = os.path.basename(files[f].name)[:-4]
         logging.info('Working on sample', sample)
         filepath = files[f].name
