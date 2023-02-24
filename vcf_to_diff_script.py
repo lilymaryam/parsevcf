@@ -1242,66 +1242,66 @@ def missing_check(lenref, ld):
     
 
 #SCRIPT STARTS HERE
+if __name__ == "__main__":
+    binary = True
+    with gzip.open(vcf, 'r') as test:
+        try:
+            test.read(1)
+        except OSError:
+            binary = False
 
-binary = True
-with gzip.open(vcf, 'r') as test:
-    try:
-        test.read(1)
-    except OSError:
-        binary = False
-
-if binary == True:
-    lenRow, samps = count_samples_bin(vcf)
-else:
-    lenRow, samps = count_samples(vcf)
-
-#be careful w dictionaries!!!
-files = make_files(samps, wd)
-
-if binary == True:
-    read_VCF_bin(vcf, files)
-    
-else:
-    read_VCF(vcf, files)
-    
-masks = mask_TB(tbmf)
-#this is not parallelized, the more samples in the vcf the longer this will take
-#logging.debug(files)
-#logging.debug(masks)
-
-for f in files:
-    files[f].close()
-
-    #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
-    #find low coverage regions for each sample 
-    if cf != None:
-        ld = mask_low_depth(cf,cd)
+    if binary == True:
+        lenRow, samps = count_samples_bin(vcf)
     else:
-        ld = None
+        lenRow, samps = count_samples(vcf)
 
-    sample = os.path.basename(files[f].name)[:-4]
-    logging.info('Working on sample', sample)
-    filepath = files[f].name
-    os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
-    os.system(f"rm {filepath}")
+    #be careful w dictionaries!!!
+    files = make_files(samps, wd)
 
-    #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
-    error = missing_check(len_ref, ld)
+    if binary == True:
+        read_VCF_bin(vcf, files)
+        
+    else:
+        read_VCF(vcf, files)
+        
+    masks = mask_TB(tbmf)
+    #this is not parallelized, the more samples in the vcf the longer this will take
+    #logging.debug(files)
+    #logging.debug(masks)
 
-    #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
-    #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
-    lines = vcf_to_diff(f'{filepath}.filt')
-    os.system(f'rm {filepath}.filt')
+    for f in files:
+        files[f].close()
 
-    all_lines = mask_and_write_diff(ld, masks,lines, samps)
-    
-    logging.info('MASK2REF')
-    final_lines = mask2ref(all_lines, masks)
+        #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
+        #find low coverage regions for each sample 
+        if cf != None:
+            ld = mask_low_depth(cf,cd)
+        else:
+            ld = None
 
-    with open(f'{wd}{sample}.report','w') as o:
-        o.write(f'{sample}.diff\t{error}\t{cd}\n')
-    with open(f'{wd}{sample}.diff','w') as o:
-        for line in final_lines:
-            o.write('\t'.join(line)+'\n')
-    
-logging.info("Finished")
+        sample = os.path.basename(files[f].name)[:-4]
+        logging.info('Working on sample', sample)
+        filepath = files[f].name
+        os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
+        os.system(f"rm {filepath}")
+
+        #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
+        error = missing_check(len_ref, ld)
+
+        #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
+        #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
+        lines = vcf_to_diff(f'{filepath}.filt')
+        os.system(f'rm {filepath}.filt')
+
+        all_lines = mask_and_write_diff(ld, masks,lines, samps)
+        
+        logging.info('MASK2REF')
+        final_lines = mask2ref(all_lines, masks)
+
+        with open(f'{wd}{sample}.report','w') as o:
+            o.write(f'{sample}.diff\t{error}\t{cd}\n')
+        with open(f'{wd}{sample}.diff','w') as o:
+            for line in final_lines:
+                o.write('\t'.join(line)+'\n')
+        
+    logging.info("Finished")
