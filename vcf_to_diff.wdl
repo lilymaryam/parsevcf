@@ -13,15 +13,15 @@ task make_mask_and_diff {
 		Boolean histograms = false
 
 		# runtime attributes
-		Int addldisk = 250
-		Int cpu      = 16
+		Int addldisk = 10
+		Int cpu      = 8
 		Int retries  = 1
-		Int memory   = 32
+		Int memory   = 16
 		Int preempt  = 1
 	}
 	String basename_bam = basename(bam, ".bam")
 	String basename_vcf = basename(vcf, ".vcf")
-	Int finalDiskSize = ceil(size(bam, "GB")) + addldisk
+	Int finalDiskSize = ceil(size(bam, "GB")*2) + ceil(size(vcf, "GB")*2) + addldisk
 	
 	command <<<
 	set -eux pipefail
