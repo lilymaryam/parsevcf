@@ -10,6 +10,7 @@ parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='dir
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-l', '--logging', required=False, default=False, type=bool, help="if True, logging.debug verbose logging to stdout, else suppress most logging")
+parser.add_argument('-gz', '--gzipped', required=False, default=True, type=bool, help="if True, input VCF file is gzipped")
 
 args = parser.parse_args()
 vcf = args.VCF
@@ -1243,14 +1244,16 @@ def missing_check(lenref, ld):
 
 #SCRIPT STARTS HERE
 if __name__ == "__main__":
-    binary = True
-    with gzip.open(vcf, 'r') as test:
-        try:
-            test.read(1)
-        except OSError:
-            binary = False
 
-    if binary == True:
+# This block was previously used to test if VCFs were gzipped, but that's an input arg now
+#    binary = True
+#    with gzip.open(vcf, 'r') as test:
+#        try:
+#            test.read(1)
+#        except OSError:
+#            binary = False
+
+    if gz == True:
         lenRow, samps = count_samples_bin(vcf)
     else:
         lenRow, samps = count_samples(vcf)
@@ -1258,7 +1261,7 @@ if __name__ == "__main__":
     #be careful w dictionaries!!!
     files = make_files(samps, wd)
 
-    if binary == True:
+    if gz == True:
         read_VCF_bin(vcf, files)
         
     else:
