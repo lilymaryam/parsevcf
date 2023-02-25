@@ -524,31 +524,34 @@ def vcf_to_diff(vcf_file):
 
 def make_files(samps,wd):
     '''
-    Initializes and opens VCF file for each sample in the VCF (will create smaller VCFs for multi-sample VCFs 
-    and create a separate editable temp VCF from the original input)
+    Initializes VCF file for each sample in the VCF (will create smaller VCFs for multi-sample VCFs)
     Args: 
         samps: a list of sample names
+        vcf (global): string of the starting VCF name (only used to make sure new VCFs' filename differs from old VCF)
         wd: a working directory where all files should be created *make sure directory contains enough space for all uncompressed 
         sampleVCFs 
     outputs:
-        files: a dictionary that has the column number as key and the VCF filepath as the value
+        files: a dictionary that has the column number as key and the VCF-file-to-create as the value
     '''
     files = {}
     for i in range(len(samps)):
         logging.debug(f"samps[{i}] is {samps[i]}")
     for i in range(len(samps)):
         s = samps[i]
-        logging.debug(f"samps[i] is {s}")
         #replace '/' in sample name with '-'
         if '/' not in s:
-            logging.debug(f"Opening {wd}{s}.vcf")
-            file = open(f'{wd}{s}.vcf','w')
+            file = f"{wd}{s}.vcf"
+            #file = open(f'{wd}{s}.vcf','w')
         else:
             newname = s.replace('/', '-')
-            logging.debug(f"Opening {wd}{newname}.vcf")
-            file = open(f'{wd}{newname}.vcf','w')
-        files[i+9] = file # sets the open file, not the path of the file
-        logging.debug(file)
+            file = f"{wd}{newname}.vcf"
+            #file = open(f'{wd}{newname}.vcf','w')
+        global vcf
+        if file == f"./{vcf}" or file == vcf:
+            logging.warning("Per-sample VCF file name cannot match input VCF filename, so we will rename the input VCF")
+            os.system(f"mv {vcf} input_{vcf}")
+            vcf = f"input_{vcf}"
+        files[i+9] = file
     return files
                       
 def count_samples(vcf):
@@ -576,7 +579,7 @@ def count_samples(vcf):
         return lenRow, samps
     except UnboundLocalError:
         logging.error("Could not calculate lenrow")
-        exit 1                           
+        exit(1)                          
 
 
 def count_samples_bin(vcf):
@@ -620,17 +623,19 @@ def read_VCF(vcf, files):
                 line = line.strip().split()
                 #position data for all samples
                 position = line[0:9] 
-                for f in files:
+                for key in files:
                     #sample specific data
-                    parcel = [line[f]]
+                    parcel = [line[key]]
                     newline = position+parcel
                     #write position and sample data to file in VCF format
-                    files[f].write('\t'.join(newline)+'\n')
+                    with open(files[key], "a") as f:
+                        f.write('\t'.join(newline)+'\n')
             #write position and sample data to file in VCF format
             else:
                 #write heading to new VCF file 
-                for f in files:
-                    files[f].write(line)
+                for key in files:
+                    with open(files[key], "a") as f:
+                        f.write(line)
 
 def read_VCF_bin(vcf, files):
     '''
@@ -651,17 +656,19 @@ def read_VCF_bin(vcf, files):
                 line = line.strip().split()
                 #position data for all samples
                 position = line[0:9] 
-                for f in files:
+                for key in files:
                     #sample specific data
-                    parcel = [line[f]]
-                    logging.debug(f"parcel {parcel}")
+                    parcel = [line[key]]
                     newline = position+parcel
-                    logging.debug(f"newline {newline}")
-                    #write position and sample data to file in VCF format 
-                    files[f].write('\t'.join(newline)+'\n')
+                    #write position and sample data to file in VCF format
+                    with open(files[key], "a") as f:
+                        f.write('\t'.join(newline)+'\n')
+            #write position and sample data to file in VCF format
             else:
-                for f in files:
-                    files[f].write(line)
+                #write heading to new VCF file 
+                for key in files:
+                    with open(files[key], "a") as f:
+                        f.write(line)
 
 def check_prev_line(prev, line):
     '''
@@ -1279,6 +1286,8 @@ if __name__ == "__main__":
         
     else:
         read_VCF(vcf, files)
+
+    logging.info("Masking...")
         
     masks = mask_TB(tbmf)
     #this is not parallelized, the more samples in the vcf the longer this will take
@@ -1286,7 +1295,7 @@ if __name__ == "__main__":
     #logging.debug(masks)
 
     for f in files:
-        files[f].close()
+        #files[f].close()
         logging.debug(f"For {f} in {files}")
 
         #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
@@ -1296,9 +1305,9 @@ if __name__ == "__main__":
         else:
             ld = None
 
-        sample = os.path.basename(files[f].name)[:-4]
+        sample = os.path.basename(files[f])[:-4]
         logging.info(f'Working on sample {sample}')
-        filepath = files[f].name
+        filepath = files[f]
         logging.debug(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
         os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
         
