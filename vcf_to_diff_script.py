@@ -605,7 +605,12 @@ def count_samples_bin(vcf):
                     samps = line[9:]
                     lenRow = len(line)
                     break
-    return lenRow, samps
+    try:
+        logging.info(f"{vcf} appears to have {lenRow} columns")
+        return lenRow, samps
+    except UnboundLocalError:
+        logging.error("Could not calculate number of samples -- does the VCF exist, and does it have more than just a header?")
+        exit(1)   
 
 def read_VCF(vcf, files):
     '''
