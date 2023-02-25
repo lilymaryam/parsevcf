@@ -2,6 +2,7 @@ import os
 import argparse
 import gzip
 import logging
+import subprocess
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
@@ -19,7 +20,7 @@ cf = args.bed_coverage_file
 cd = args.coverage_depth
 if args.logging is True:
     logging.basicConfig(filename="diff.log", filemode='a', level=logging.DEBUG,
-        format="%(asctime)s %(name)s:%(levelname)s:%(message)s", datefmt="%I:%M:%S %p")
+        format="%(asctime)s %(funcName)s:%(lineno)d  %(levelname)s:%(message)s", datefmt="%I:%M:%S %p")
     logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tcf={cf}\n\tcd={cd}\n\tl={args.logging}")
 else:
     logging.basicConfig(level=logging.WARNING)
@@ -707,7 +708,7 @@ def check_prev_line(prev, line):
 
     if line_s >= prev_s and line_e <= prev_e:
         overlap = True
-        logging.info('Full OVERLAP!!!!!')
+        logging.debug('Full OVERLAP!!!!!')
         logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
     elif line_s >= prev_s and line_s < prev_e and line_e >= prev_e:
         overlap = True 
@@ -1201,8 +1202,8 @@ def mask2ref(lines, tb_masks):
         #cont += 1
         #if cont == 1000:
         #    break
-        logging.debug('end', 'lines', len(lines), 'tb', len(tb_keys))
-        logging.debug('tb', tb_keys_ind, 'lines', lines_ind)
+        logging.debug(f'end: {len(lines)}, {len(tb_keys)} tb')
+        logging.debug(f'tb {tb_keys_ind} lines {lines_ind}')
 
     
     #return all_sites
