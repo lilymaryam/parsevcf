@@ -19,7 +19,7 @@ tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
 if args.logging is True:
-    logging.basicConfig(filename="diff.log", filemode='a', level=logging.DEBUG,
+    logging.basicConfig(filename=f"{os.path.basename(vcf[:-4])}.log", filemode='a', level=logging.DEBUG,
         format="%(asctime)s %(funcName)s@%(lineno)d::%(levelname)s: %(message)s", datefmt="%I:%M:%S %p")
     logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tcf={cf}\n\tcd={cd}\n\tl={args.logging}")
 else:
@@ -1065,23 +1065,23 @@ def mask2ref(lines, tb_masks):
                 #update line after first segment AND TB mask
                 lines[lines_ind][1] = str(tb_end)
                 lines[lines_ind][2] = str(line_end-tb_end)
-                #logging.debug(f'new line {new_line}')
-                #logging.debug(f'update line {lines[lines_ind]}')
+                logging.debug('  OP - new line {new_line}')
+                logging.debug('  OP - update line {lines[lines_ind]}')
                 final.append(new_line)
                 tb_keys_ind += 1
 
             elif line_start <= tb_start and line_end > tb_start and line_end <= tb_end:
                 logging.debug('left overlap')
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
-                #logging.debug('old line', lines[lines_ind])
-                #logging.debug('new line', new_line)
+                logging.debug('  LO - old line {lines[lines_ind]}')
+                logging.debug('  LO - new line {new_line}')
                 final.append(new_line)
                 lines_ind += 1
 
             elif line_start >= tb_start and line_start < tb_end and line_end > tb_end:
                 logging.debug('right overlap')
                 new_line = [lines[lines_ind][0], str(tb_end), str(line_end-tb_end)]
-                #logging.debug('new line', new_line)
+                logging.debug(f'  RO - new line {new_line}')
                 final.append(new_line)
                 tb_keys_ind += 1
                 lines_ind += 1
@@ -1201,6 +1201,8 @@ def mask2ref(lines, tb_masks):
         #cont += 1
         #if cont == 1000:
         #    break
+        else:
+            logging.warning('this probably should not happen')
         logging.debug(f'end: {len(lines)}, {len(tb_keys)} tb')
         logging.debug(f'tb {tb_keys_ind} lines {lines_ind}')
 
