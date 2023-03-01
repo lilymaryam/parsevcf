@@ -13,35 +13,35 @@ task make_mask_and_diff {
 		Boolean histograms = false
 
 		# runtime attributes
-		Int addldisk = 250
-		Int cpu      = 16
+		Int addldisk = 10
+		Int cpu      = 8
 		Int retries  = 1
-		Int memory   = 32
+		Int memory   = 16
 		Int preempt  = 1
 	}
-	String basestem = basename(bam, ".bam")
-	Int finalDiskSize = ceil(size(bam, "GB")) + addldisk
+	String basename_bam = basename(bam, ".bam")
+	String basename_vcf = basename(vcf, ".vcf")
+	Int finalDiskSize = ceil(size(bam, "GB")*2) + ceil(size(vcf, "GB")*2) + addldisk
 	
 	command <<<
 	set -eux pipefail
 	cp ~{bam} .
-	samtools sort -u ~{basestem}.bam > sorted_u_~{basestem}.bam
-	bedtools genomecov -ibam sorted_u_~{basestem}.bam -bga | \
+	samtools sort -u ~{basename_bam}.bam > sorted_u_~{basename_bam}.bam
+	bedtools genomecov -ibam sorted_u_~{basename_bam}.bam -bga | \
 		awk '$4 < ~{min_coverage}' > \
-		~{basestem}_below_~{min_coverage}x_coverage.bedgraph
+		~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph
 	if [[ "~{histograms}" = "true" ]]
 	then
-		bedtools genomecov -ibam sorted_u_~{basestem}.bam > histogram.txt
+		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
-	mkdir outs
-	# commit 2c7c8c4c2d57ac7e5f63c66d2922d4b50dff9322
-	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.0.3/vcf_to_diff_script.py
-	python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{basestem}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
+	python3 vcf_to_diff_script.py -v ~{vcf} -d . -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	ls -lha
 	>>>
 
 	runtime {
 		cpu: cpu
-		docker: "ashedpotatoes/sranwrp:1.0.7"
+		docker: "ashedpotatoes/sranwrp:1.1.6"
 		disks: "local-disk " + finalDiskSize + " HDD"
 		maxRetries: "${retries}"
 		memory: "${memory} GB"
@@ -53,10 +53,9 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File diff = glob("outs/*.diff")[0]
-		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
-		File mask_file = glob("*coverage.bedgraph")[0]
-		File report = glob("outs/*.report")[0]
+		File diff = basename_vcf+".diff"
+		File report = basename_vcf+".report"
+		File mask_file = basename_bam+"_below_"+min_coverage+"x_coverage.bedgraph"
 		File? histogram = "histogram.txt"
 	}
 }
@@ -76,19 +75,21 @@ task make_diff {
 		Int preempt	= 1
 	}
 	# estimate disk size
+	String basename = basename(vcf)
 	Int finalDiskSize = 2*ceil(size(vcf, "GB")) + addldisk
 
 	command <<<
 		set -eux pipefail
 		mkdir outs
-		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/main/vcf_to_diff_script.py
+		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
 		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{cf} -cd ~{cd}
+		ls -lha outs/
 	>>>
 
 	runtime {
 		cpu: cpu
 		disks: "local-disk " + finalDiskSize + " SSD"
-		docker: "ashedpotatoes/sranwrp:1.0.7"
+		docker: "ashedpotatoes/sranwrp:1.1.6"
 		maxRetries: "${retries}"
 		memory: "${memory} GB"
 		preemptible: "${preempt}"
@@ -99,8 +100,7 @@ task make_diff {
 	}
 
 	output {
-		File diff = glob("outs/*.diff")[0]
-		File debug_script = "vcf_to_diff_script.py" # to keep track of what's on main
-		File report = glob("outs/*.txt")[0]
+		File diff = "outs/"+basename+".diff"
+		File report = "outs/"+basename+".report"
 	}
 }
