@@ -2,6 +2,7 @@ import os
 import argparse
 import gzip
 import logging
+import subprocess
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
@@ -9,7 +10,7 @@ parser.add_argument('-d', '--working_directory', required=True, type=str, help='
 parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
 parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
-parser.add_argument('-l', '--logging', required=False, default=False, type=bool, help="if True, logging.debug verbose logging to stdout, else suppress most logging")
+parser.add_argument('-l', '--logging', required=False, default=True, type=bool, help="if True, logging.debug verbose logging to diff.log, else suppress most logging")
 
 args = parser.parse_args()
 vcf = args.VCF
@@ -18,7 +19,9 @@ tbmf = args.tb_maskfile
 cf = args.bed_coverage_file
 cd = args.coverage_depth
 if args.logging is True:
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(filename=f"{os.path.basename(vcf[:-4])}.log", filemode='a', level=logging.DEBUG,
+        format="%(asctime)s %(funcName)s@%(lineno)d::%(levelname)s: %(message)s", datefmt="%I:%M:%S %p")
+    logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tcf={cf}\n\tcd={cd}\n\tl={args.logging}")
 else:
     logging.basicConfig(level=logging.WARNING)
 
@@ -522,24 +525,33 @@ def vcf_to_diff(vcf_file):
 
 def make_files(samps,wd):
     '''
-    Initializes and opens VCF file for each sample in the VCF (will create smaller VCFs for multi-sample VCFs 
-    and create a separate editable temp VCF from the original input)
+    Initializes VCF file for each sample in the VCF (will create smaller VCFs for multi-sample VCFs)
     Args: 
         samps: a list of sample names
+        vcf (global): string of the starting VCF name (only used to make sure new VCFs' filename differs from old VCF)
         wd: a working directory where all files should be created *make sure directory contains enough space for all uncompressed 
         sampleVCFs 
     outputs:
-        files: a dictionary that has the column number as key and the VCF filepath as the value
+        files: a dictionary that has the column number as key and the VCF-file-to-create as the value
     '''
     files = {}
+    for i in range(len(samps)):
+        logging.debug(f"samps[{i}] is {samps[i]}")
     for i in range(len(samps)):
         s = samps[i]
         #replace '/' in sample name with '-'
         if '/' not in s:
-            file = open(f'{wd}{s}.vcf','w')
+            file = f"{wd}{s}.vcf"
+            #file = open(f'{wd}{s}.vcf','w')
         else:
             newname = s.replace('/', '-')
-            file = open(f'{wd}{newname}.vcf','w')
+            file = f"{wd}{newname}.vcf"
+            #file = open(f'{wd}{newname}.vcf','w')
+        global vcf
+        if file == f"./{vcf}" or file == vcf:
+            logging.warning("Per-sample VCF file name cannot match input VCF filename, so we will rename the input VCF")
+            subprocess.run(["mv", f"{vcf}", f"input_{vcf}"], check=True)
+            vcf = f"input_{vcf}" # WARNING: THIS OVERWRITES A GLOBAL VARIABLE
         files[i+9] = file
     return files
                       
@@ -564,7 +576,12 @@ def count_samples(vcf):
                     samps = line[9:]
                     lenRow = len(line)
                     break
-    return lenRow, samps                           
+    try:
+        logging.info(f"{vcf} appears to have {lenRow} columns")
+        return lenRow, samps
+    except UnboundLocalError:
+        logging.error("Could not calculate number of samples -- does the VCF exist, and does it have more than just a header?")
+        exit(1)                          
 
 
 def count_samples_bin(vcf):
@@ -588,7 +605,12 @@ def count_samples_bin(vcf):
                     samps = line[9:]
                     lenRow = len(line)
                     break
-    return lenRow, samps
+    try:
+        logging.info(f"{vcf} appears to have {lenRow} columns")
+        return lenRow, samps
+    except UnboundLocalError:
+        logging.error("Could not calculate number of samples -- does the VCF exist, and does it have more than just a header?")
+        exit(1)   
 
 def read_VCF(vcf, files):
     '''
@@ -608,17 +630,19 @@ def read_VCF(vcf, files):
                 line = line.strip().split()
                 #position data for all samples
                 position = line[0:9] 
-                for f in files:
+                for key in files:
                     #sample specific data
-                    parcel = [line[f]]
+                    parcel = [line[key]]
                     newline = position+parcel
                     #write position and sample data to file in VCF format
-                    files[f].write('\t'.join(newline)+'\n')
+                    with open(files[key], "a") as f:
+                        f.write('\t'.join(newline)+'\n')
             #write position and sample data to file in VCF format
             else:
                 #write heading to new VCF file 
-                for f in files:
-                    files[f].write(line)
+                for key in files:
+                    with open(files[key], "a") as f:
+                        f.write(line)
 
 def read_VCF_bin(vcf, files):
     '''
@@ -639,15 +663,19 @@ def read_VCF_bin(vcf, files):
                 line = line.strip().split()
                 #position data for all samples
                 position = line[0:9] 
-                for f in files:
+                for key in files:
                     #sample specific data
-                    parcel = [line[f]]
+                    parcel = [line[key]]
                     newline = position+parcel
-                    #write position and sample data to file in VCF format 
-                    files[f].write('\t'.join(newline)+'\n')
+                    #write position and sample data to file in VCF format
+                    with open(files[key], "a") as f:
+                        f.write('\t'.join(newline)+'\n')
+            #write position and sample data to file in VCF format
             else:
-                for f in files:
-                    files[f].write(line)
+                #write heading to new VCF file 
+                for key in files:
+                    with open(files[key], "a") as f:
+                        f.write(line)
 
 def check_prev_line(prev, line):
     '''
@@ -686,12 +714,12 @@ def check_prev_line(prev, line):
 
     if line_s >= prev_s and line_e <= prev_e:
         overlap = True
-        logging.info('Full OVERLAP!!!!!')
-        logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
+        logging.debug('Full OVERLAP!!!!!')
+        logging.debug(f'prev {prev_s} {prev_e}, line, {line_s} {line_e}')
     elif line_s >= prev_s and line_s < prev_e and line_e >= prev_e:
         overlap = True 
 #<<<<<<< fix_mismatch_overlaps
-        logging.debug('right overlap vcftodiff', 'prev', prev_s, prev_e, 'line', line_s, line_e)
+        logging.debug(f'right overlap vcftodiff, prev {prev_s}, {prev_e}, line {line_s}, {line_e}')
         
         #logging.debug('prev', prev)
         #logging.debug('line', line)
@@ -700,7 +728,7 @@ def check_prev_line(prev, line):
         #if line[0] and prev[0] are the same, we can squish these, otherwise, ignore 
         #squish later if necessary 
         if line_s == prev_e:
-            logging.debug('start to end', line, prev)
+            logging.debug('start to end {line} {prev}')
             '''            
         #=======
         logging.debug('right overlap vcftodiff', 'prev', prev, prev_s, prev_e, 'line', line, line_s, line_e)
@@ -717,29 +745,27 @@ def check_prev_line(prev, line):
             overlap = False
 
         elif line_s < prev_e and line_e>prev_e:
-            logging.debug('truly right overlap', 'prev', prev, 'line', line)
+            logging.debug(f'truly right overlap (prev {prev} line {line}')
 
             #COME BACK HERE WEDS!!!!!!!!!!! need to figure out how to add two lines 
             if prev[0] == '-' and line[0] != '-':
-                logging.debug('masking needed', prev)
-                logging.debug('masking needed', line)
+                logging.debug(f'masking needed (prev {prev}, line {line})')
                 line[1] = str(prev_e)
                 line[2] = str(line_e-prev_e)
-                logging.debug('newline', line)
+                logging.debug(f'newline {line}')
                 newline = line
 
             elif prev[0] != '-' and line[0] == '-':
-                logging.debug('masking needed complicated', prev)
-                logging.debug('masking needed complicated', line)
+                logging.debug(f'masking needed complicated (prev {prev}, line {line})')
 
                 
             elif prev[0] == line[0]:
                 logging.debug('combine!')
                 prev[2] = str(line_e-prev_s)
-                logging.debug('prev after ', prev)
+                logging.debug(f'prev after {prev}')
                 change = prev
             else:
-                logging.warning('BAD NEWS', 'line',line, 'prev', prev )
+                logging.warning(f'BAD NEWS: line {line}, prev {prev}')
             
 
             #change = line
@@ -754,7 +780,7 @@ def check_prev_line(prev, line):
             change = prev
     #elif line_s <= prev_s and line_e >= prev_s:
     if newline != None:
-        logging.debug('overlap', overlap, 'change', change, 'newlin',newline)
+        logging.debug(f'overlap {overlap} change {change} newline {newline}')
     return overlap, change, newline
 
 #def interpret_overlap()  
@@ -780,7 +806,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
     masks = ld
     masks_key = sorted(ld.keys())
     logging.info("Masking the diff file...")
-    logging.debug('masks', masks_key, masks)
+    logging.debug(f'masks: {masks_key} {masks}')
     
     # iterate through all masks and lines one time and combine things as needed
     masks_ind = 0
@@ -815,11 +841,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 if prev != None:
                     overlap,change,newline = check_prev_line(prev, ['-', mask_start, mask_end-mask_start])
                     if overlap == True and change != None:
-                        logging.debug('change', change)
+                        logging.debug(f'change {change}')
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        logging.debug('append!!!!', newline)
+                        logging.debug(f'append!!!! {newline}')
                 if prev == None or overlap == False:
                     all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
 
@@ -833,11 +859,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 if prev != None:
                     overlap,change, newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
-                        logging.debug('change', change)
+                        logging.debug(f'change {change}')
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        logging.debug('append!!!!', newline)
+                        logging.debug(f'append!!!! {newline}')
                 if prev == None or overlap == False:
                     
                     all_lines.append(line)
@@ -853,15 +879,15 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     if prev != None:
                         overlap,change,newline = check_prev_line(prev, line)
                         if overlap == True and change != None:
-                            logging.debug('change', change)
-                            logging.debug('before',all_lines[-1])
+                            logging.debug(f'change {change}')
+                            logging.debug(f'change {all_lines[-1]}')
                             #change does this help?
                             
                             all_lines[-1][2] = change[2]
-                            logging.debug('after',all_lines[-1])
+                            logging.debug(f'after {all_lines[-1]}')
                         if newline != None:
                             all_lines.append(newline)
-                            logging.debug('append!!!!', newline)
+                            logging.debug(f'append!!!! {newline}')
                     if prev == None or overlap == False:
                         all_lines.append(line)
                     lines_ind += 1
@@ -874,11 +900,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     if prev != None:
                         overlap,change,newline = check_prev_line(prev, line)
                         if overlap == True and change != None:
-                            logging.debug('change', change)
+                            logging.debug(f'change {change}')
                             #all_sites[change[0]] = change[1]
                         if newline != None:
                             all_lines.append(newline)
-                            logging.debug('append!!!!', newline)
+                            logging.debug(f'append!!!! {newline}')
                     if prev == None or overlap == False:
                         all_lines.append(['-', str(line_start), str(mask_end-line_end)])
                     masks_ind += 1
@@ -892,11 +918,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     #change here
                     overlap,change, newline = check_prev_line(prev, ['-',mask_start,mask_end-mask_start])
                     if overlap == True and change != None:
-                        logging.debug('change', change)
+                        logging.debug(f'change {change}')
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        logging.debug('append!!!!', newline)
+                        logging.debug(f'append!!!! {newline}')
                 if prev == None or overlap == False:
                     all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
                 masks_ind += 1
@@ -909,11 +935,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 if prev != None:
                     overlap,change,newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
-                        logging.debug('change', change)
+                        logging.debug(f'change {change}')
                         #all_sites[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        logging.debug('append!!!!', newline)
+                        logging.debug(f'append!!!! {newline}')
                 if prev == None or overlap == False:
                 
                     all_lines.append(['-', str(mask_start), str(line_end-mask_start)])
@@ -921,7 +947,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 lines_ind += 1
 
             else:
-                logging.debug('other', 'what else could happen?')
+                logging.debug('other... what else could happen?')
                 #logging.debug('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
                 #all_sites[tb_start]
 
@@ -944,13 +970,13 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                     overlap,change,newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
                         #do i need to change this?
-                        logging.debug('change!!!!!', change)
+                        logging.debug('change!!!!! {change}')
                         #all_lines[change[0]] = change[1]
                     if newline != None:
                         all_lines.append(newline)
-                        logging.debug('append!!!!', newline)
+                        logging.debug('append!!!! {newline}')
             if prev == None or overlap == False:
-                logging.debug('add as is!!!!!!', 'line', line, 'prev', prev )
+                logging.debug(f'add as is!!!!!! line {line} prev {prev}')
                 all_lines.append(line)
             lines_ind += 1
 
@@ -967,14 +993,14 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 overlap,change,newline = check_prev_line(prev, ['-', str(mask_start), str(mask_end-mask_start)])
                 if overlap == True and change != None:
                     #do i need to change this?
-                    logging.debug('change!!!!!', change)
+                    logging.debug(f'change!!!!! {change}')
                     #all_lines[change[0]] = change[1]
                 if newline != None:
                     all_lines.append(newline)
-                    logging.debug('append!!!!', newline)
+                    logging.debug(f'append!!!! {newline}')
             if prev == None or overlap == False:
                 #all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])    
-                logging.debug('add mask as is!!!!!!', 'mask', mask_start, mask_end, 'prev', prev )
+                logging.debug(f'add mask as is!!!!!! mask {mask_start} {mask_end} prev {prev}' )
                 all_lines.append(['-', str(mask_start), str(mask_end-mask_start)])
                 
 
@@ -983,18 +1009,18 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
         
         
         prev = all_lines[-1]
-        logging.debug('prev', prev)
+        logging.debug(f'prev {prev}')
 
     #need to add final prev?  
-    logging.debug('final prev', prev)
+    logging.debug(f'final prev {prev}')
     return all_lines
 
 def mask2ref(lines, tb_masks):
-    logging.debug(tb_masks)
+    logging.debug(f"tb_masks are as follows: {tb_masks}")
     final = [lines[0]]
     #editing thought: would likely benefit from being a list rather than a dictionary 
     tb_keys = sorted(tb_masks.keys())
-    logging.debug('all lines', lines)
+    logging.debug(f'all lines: {lines}')
     tb_keys_ind = 0
     lines_ind = 1
     cont = 0
@@ -1008,7 +1034,7 @@ def mask2ref(lines, tb_masks):
             tb_end =  tb_masks[tb_keys[tb_keys_ind]]
             line_start = int(lines[lines_ind][1])
             line_end = line_start+int(lines[lines_ind][2])
-            logging.debug('tb start', tb_start, 'tb_end', tb_end, 'line start', line_start, 'line end', line_end)
+            logging.debug(f'tb start {tb_start} tb_end {tb_end} line start {line_start } line end {line_end}')
 
             if line_end <= tb_start:
                 '''
@@ -1038,29 +1064,29 @@ def mask2ref(lines, tb_masks):
                 lines_ind += 1
             
             elif line_start < tb_start and line_end > tb_end:
-                logging.debug('full overlap OPPOSITE', 'line',lines[lines_ind], 'tb', tb_start, tb_end)
+                logging.debug(f'full overlap OPPOSITE: line {lines[lines_ind]} tb {tb_start} {tb_end}')
                 #first segment of line before TB mask
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
                 #update line after first segment AND TB mask
                 lines[lines_ind][1] = str(tb_end)
                 lines[lines_ind][2] = str(line_end-tb_end)
-                logging.debug('new line', new_line)
-                logging.debug('update line', lines[lines_ind])
+                logging.debug('  OP - new line {new_line}')
+                logging.debug('  OP - update line {lines[lines_ind]}')
                 final.append(new_line)
                 tb_keys_ind += 1
 
             elif line_start <= tb_start and line_end > tb_start and line_end <= tb_end:
                 logging.debug('left overlap')
                 new_line = [lines[lines_ind][0], str(line_start), str(tb_start-line_start)]
-                logging.debug('old line', lines[lines_ind])
-                logging.debug('new line', new_line)
+                logging.debug('  LO - old line {lines[lines_ind]}')
+                logging.debug('  LO - new line {new_line}')
                 final.append(new_line)
                 lines_ind += 1
 
             elif line_start >= tb_start and line_start < tb_end and line_end > tb_end:
                 logging.debug('right overlap')
                 new_line = [lines[lines_ind][0], str(tb_end), str(line_end-tb_end)]
-                logging.debug('new line', new_line)
+                logging.debug(f'  RO - new line {new_line}')
                 final.append(new_line)
                 tb_keys_ind += 1
                 lines_ind += 1
@@ -1180,8 +1206,10 @@ def mask2ref(lines, tb_masks):
         #cont += 1
         #if cont == 1000:
         #    break
-        logging.debug('end', 'lines', len(lines), 'tb', len(tb_keys))
-        logging.debug('tb', tb_keys_ind, 'lines', lines_ind)
+        else:
+            logging.warning('this probably should not happen')
+        logging.debug(f'end: {len(lines)}, {len(tb_keys)} tb')
+        logging.debug(f'tb {tb_keys_ind} lines {lines_ind}')
 
     
     #return all_sites
@@ -1238,70 +1266,80 @@ def missing_check(lenref, ld):
 
     #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
     #logging.debug('pass')
+
+    logging.info(f"{missing_count/lenref} % of the genome seems to be low-coverage.")
     return missing_count/lenref
     
 
 #SCRIPT STARTS HERE
+if __name__ == "__main__":
 
-binary = True
-with gzip.open(vcf, 'r') as test:
-    try:
-        test.read(1)
-    except OSError:
-        binary = False
+    binary = True
+    with gzip.open(vcf, 'r') as test:
+        try:
+            test.read(1)
+        except OSError:
+            binary = False
 
-if binary == True:
-    lenRow, samps = count_samples_bin(vcf)
-else:
-    lenRow, samps = count_samples(vcf)
-
-#be careful w dictionaries!!!
-files = make_files(samps, wd)
-
-if binary == True:
-    read_VCF_bin(vcf, files)
-    
-else:
-    read_VCF(vcf, files)
-    
-masks = mask_TB(tbmf)
-#this is not parallelized, the more samples in the vcf the longer this will take
-#logging.debug(files)
-#logging.debug(masks)
-
-for f in files:
-    files[f].close()
-
-    #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
-    #find low coverage regions for each sample 
-    if cf != None:
-        ld = mask_low_depth(cf,cd)
+    logging.info("Reading vcf and masks...")
+    if binary == True:
+        lenRow, samps = count_samples_bin(vcf)
     else:
-        ld = None
+        lenRow, samps = count_samples(vcf)
 
-    sample = os.path.basename(files[f].name)[:-4]
-    logging.info('Working on sample', sample)
-    filepath = files[f].name
-    os.system(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
-    os.system(f"rm {filepath}")
+    #be careful w dictionaries!!!
+    files = make_files(samps, wd)
 
-    #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
-    error = missing_check(len_ref, ld)
+    if binary == True:
+        read_VCF_bin(vcf, files)
+        
+    else:
+        read_VCF(vcf, files)
 
-    #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
-    #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
-    lines = vcf_to_diff(f'{filepath}.filt')
-    os.system(f'rm {filepath}.filt')
+    logging.info("Masking...")
+        
+    masks = mask_TB(tbmf)
+    #this is not parallelized, the more samples in the vcf the longer this will take
+    #logging.debug(files)
+    #logging.debug(masks)
 
-    all_lines = mask_and_write_diff(ld, masks,lines, samps)
-    
-    logging.info('MASK2REF')
-    final_lines = mask2ref(all_lines, masks)
+    for f in files:
+        #files[f].close()
+        logging.debug(f"For {f} in {files}")
 
-    with open(f'{wd}{sample}.report','w') as o:
-        o.write(f'{sample}.diff\t{error}\t{cd}\n')
-    with open(f'{wd}{sample}.diff','w') as o:
-        for line in final_lines:
-            o.write('\t'.join(line)+'\n')
-    
-logging.info("Finished")
+        #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
+        #find low coverage regions for each sample 
+        if cf != None:
+            ld = mask_low_depth(cf,cd)
+        else:
+            ld = None
+
+        sample = os.path.basename(files[f])[:-4]
+        logging.info(f'Working on sample {sample}')
+        filepath = files[f]
+        logging.debug(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
+        subprocess.run(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}", shell=True, check=True)
+        
+        #os.system(f"rm {filepath}") # deleting the VCF isn't necessary
+
+        #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
+        error = missing_check(len_ref, ld)
+
+        #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
+        #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
+        lines = vcf_to_diff(f'{filepath}.filt')
+        subprocess.run(['rm', f'{filepath}.filt'], check=True)
+
+        all_lines = mask_and_write_diff(ld, masks,lines, samps)
+        
+        logging.info('Masking to reference...')
+        final_lines = mask2ref(all_lines, masks)
+        logging.info('Writing results...')
+
+        with open(f'{wd}{sample}.report','w') as o:
+            o.write(f'{sample}.diff\t{error}\t{cd}\n')
+        with open(f'{wd}{sample}.diff','w') as o:
+            for line in final_lines:
+                o.write('\t'.join(line)+'\n')
+        
+    logging.info("Finished")
