@@ -1035,6 +1035,7 @@ def mask2ref(lines, tb_masks):
             line_start = int(lines[lines_ind][1])
             line_end = line_start+int(lines[lines_ind][2])
             logging.debug(f'tb start {tb_start} tb_end {tb_end} line start {line_start } line end {line_end}')
+            #print('tb_keys_ind', tb_keys_ind, 'len tb masks', len(tb_keys), 'lines ind', lines_ind, 'len(lines)', len(lines))
 
             if line_end <= tb_start:
                 '''
@@ -1206,8 +1207,17 @@ def mask2ref(lines, tb_masks):
         #cont += 1
         #if cont == 1000:
         #    break
+        elif tb_keys_ind < len(tb_keys) and lines_ind == len(lines):
+            #if lines finish before masks, end while loop
+            #we are masking to ref so we don't have to keep going through masks
+            #break
+            #logging.debug(lines[lines_ind])
+            #final.append(lines[lines_ind])
+            #tb_keys_ind += 1
+            break
         else:
             logging.warning('this probably should not happen')
+            #print('tb_keys_ind', tb_keys_ind, 'len tb masks', len(tb_keys), 'lines ind', lines_ind, 'len(lines)', len(lines))
         logging.debug(f'end: {len(lines)}, {len(tb_keys)} tb')
         logging.debug(f'tb {tb_keys_ind} lines {lines_ind}')
 
@@ -1305,6 +1315,7 @@ if __name__ == "__main__":
 
     for f in files:
         #files[f].close()
+        print('files', files)
         logging.debug(f"For {f} in {files}")
 
         #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
@@ -1317,7 +1328,7 @@ if __name__ == "__main__":
         sample = os.path.basename(files[f])[:-4]
         logging.info(f'Working on sample {sample}')
         filepath = files[f]
-        logging.debug(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
+        #logging.debug(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
         subprocess.run(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}", shell=True, check=True)
         
         #os.system(f"rm {filepath}") # deleting the VCF isn't necessary
