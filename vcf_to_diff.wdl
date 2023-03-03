@@ -25,17 +25,28 @@ task make_mask_and_diff {
 	
 	command <<<
 	set -eux pipefail
+	start=$(date +%s)
+	echo "Copying bam..."
 	cp ~{bam} .
+	echo "Sorting bam..."
 	samtools sort -u ~{basename_bam}.bam > sorted_u_~{basename_bam}.bam
+	echo "Calculating coverage..."
 	bedtools genomecov -ibam sorted_u_~{basename_bam}.bam -bga | \
 		awk '$4 < ~{min_coverage}' > \
 		~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph
 	if [[ "~{histograms}" = "true" ]]
 	then
+		echo "Generating histograms..."
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
+	echo "Pulling script..."
 	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/b2cc0ade98fb4630eb4af0e404eb6ad197f567e6/vcf_to_diff_script.py
+	echo "Running script..."
 	python3 vcf_to_diff_script.py -v ~{vcf} -d . -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	end=$(date +%s)
+	seconds=$(echo "$end - $start" | bc)
+	minutes=$(echo "$seconds" / 60 | bc)
+	echo "Finished in about $minutes minutes ($seconds sec))"
 	ls -lha
 	>>>
 
