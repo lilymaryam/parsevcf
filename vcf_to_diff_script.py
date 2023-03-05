@@ -1285,32 +1285,6 @@ def missing_check(lenref, ld):
 
     logging.info(f"{missing_count/lenref} % of the genome seems to be low-coverage.")
     return missing_count/lenref
-
-
-def final_check(final_lines):
-    final_check = []
-    prev = None
-    prev_start = None
-    for line in final_lines:
-        #print(line)
-        #print(len(line))
-        if len(line) == 1:
-            final_check.append(line)
-        if len(line) == 3:
-            
-            #print(line)
-            if prev == None:
-                prev = int(line[1])+int(line[2])
-            else:
-                if int(line[1]) < prev:
-                    print(line)
-                elif line[2] == '0':
-                    print(line)
-                elif prev_start != None and int(line[1]) == prev_start:
-                    print(line)
-
-                prev = int(line[1]) + int(line[2])
-                prev_start = int(line[1])
                 
 
 
@@ -1379,7 +1353,6 @@ if __name__ == "__main__":
         logging.info('Masking to reference...')
         final_lines = mask2ref(all_lines, masks)
         #can I delete all_lines
-        final_check(final_lines)
         logging.info('Writing results...')
 
         with open(f'{wd}{sample}.report','w') as o:
