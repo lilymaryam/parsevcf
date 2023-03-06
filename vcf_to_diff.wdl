@@ -40,7 +40,7 @@ task make_mask_and_diff {
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
 	echo "Pulling script..."
-	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/b2cc0ade98fb4630eb4af0e404eb6ad197f567e6/vcf_to_diff_script.py
+	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/1.0.4/vcf_to_diff_script.py
 	echo "Running script..."
 	python3 vcf_to_diff_script.py -v ~{vcf} -d . -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
 	end=$(date +%s)
