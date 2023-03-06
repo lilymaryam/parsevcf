@@ -705,12 +705,11 @@ def check_prev_line(prev, line):
     line_s = int(line[1])
     line_e = line_s + int(line[2])
 
-    '''
-    DEBUG logging.debugS
-    logging.debug('prev', prev)
-    logging.debug('line', line)
-    logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
-    '''
+    
+    #DEBUG logging.debugS
+    logging.debug(f'prev {prev}')
+    logging.debug(f'line {line}')
+    logging.debug(f'prev: {prev_s} {prev_e}, line: {line_s} {line_e}')
 
     if line_s >= prev_s and line_e <= prev_e:
         overlap = True
@@ -818,12 +817,14 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
     prev = None
     while masks_ind < len(masks_key) or lines_ind < len(lines):
         #if both indexes are still going
+        
         if masks_ind < len(masks_key) and lines_ind < len(lines): 
             mask_start = masks_key[masks_ind]
             mask_end =  masks[mask_start]
             line = lines[lines_ind]
             line_start = int(lines[lines_ind][1])
             line_end = int(lines[lines_ind][1])+int(lines[lines_ind][2])
+            
 
             '''
             DEBUG logging.debugS
@@ -836,7 +837,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
 
             if line_start >= mask_start and line_end <= mask_end:
                 #line and mask fully overlap with line inside
-                #logging.debug('full overlap: line inside')
+                logging.debug('full overlap: line inside')
                 
                 if prev != None:
                     overlap,change,newline = check_prev_line(prev, ['-', mask_start, mask_end-mask_start])
@@ -855,8 +856,9 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
             #need to make sure that if snps overlap they get masked
             elif line_start <= mask_start and line_end >= mask_end:
                 #full overlap of line and mask with mask inside
-
+                logging.debug(f'full overlap mask inside mask: {mask_start} {mask_end} line:{line}')
                 if prev != None:
+                    logging.debug(f'prev: {prev} line:{line}')
                     overlap,change, newline = check_prev_line(prev, line)
                     if overlap == True and change != None:
                         logging.debug(f'change {change}')
@@ -871,10 +873,11 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 lines_ind += 1
         
             elif line_start < mask_start:
-                #?
+                logging.debug('line less than mask')
                 if line_end <= mask_start:
                     #no overlap, line completely to left
                     #logging.debug(f'line{lines_ind} is below mask{masks_ind}')
+                    logging.debug('no overlap line to left')
                     
                     if prev != None:
                         overlap,change,newline = check_prev_line(prev, line)
@@ -894,8 +897,8 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 
                 elif line_end > mask_start:
                     #if line overlaps mask on the left
-                    #logging.debug('left overlap')
-                    #logging.debug('line',line_start, line_end, 'tb', mask_start, mask_end)
+                    logging.debug('left overlap')
+                    logging.debug(f'line: {line_start} {line_end} tb: {mask_start} {mask_end}')
                     
                     if prev != None:
                         overlap,change,newline = check_prev_line(prev, line)
@@ -912,8 +915,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
 
             elif line_start >= mask_end:
                 #if line is completely to the right of mask
-                #logging.debug('no overlap', 'line', line_start, line_end, 'mask', mask_start, mask_end)
-
+                logging.debug(f'no overlap, line: {line_start}, {line_end}, mask: {mask_start} {mask_end}' )
                 if prev != None:
                     #change here
                     overlap,change, newline = check_prev_line(prev, ['-',mask_start,mask_end-mask_start])
@@ -930,10 +932,12 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
             #need to figure out whatn happens if snp is sticking out 
             elif line_start < mask_end and line_end > mask_end:
                 #line overlaps mask on the right 
-                #logging.debug('right over lap','line',line_start, line_end, 'mask', mask_start, mask_end)
+                logging.debug(f'right over lap: line: {line_start} {line_end} mask: {mask_start} {mask_end}')
+                assert line_start > mask_start
 
                 if prev != None:
-                    overlap,change,newline = check_prev_line(prev, line)
+                    logging.debug(f'prev: {prev} line:["-", {mask_start}, {line_end-mask_start}]')
+                    overlap,change,newline = check_prev_line(prev, ['-', str(mask_start), str(line_end-mask_start)])
                     if overlap == True and change != None:
                         logging.debug(f'change {change}')
                         #all_sites[change[0]] = change[1]
@@ -1038,6 +1042,8 @@ def mask2ref(lines, tb_masks):
             #print('tb_keys_ind', tb_keys_ind, 'len tb masks', len(tb_keys), 'lines ind', lines_ind, 'len(lines)', len(lines))
 
             if line_end <= tb_start:
+                #logging.debug('THIS ONE')
+                #print('THIS ONE')
                 '''
                 #line is completely to the left of the universal site
                 #if prev != None:
@@ -1279,7 +1285,8 @@ def missing_check(lenref, ld):
 
     logging.info(f"{missing_count/lenref} % of the genome seems to be low-coverage.")
     return missing_count/lenref
-    
+                
+
 
 #SCRIPT STARTS HERE
 if __name__ == "__main__":
@@ -1342,9 +1349,10 @@ if __name__ == "__main__":
         subprocess.run(['rm', f'{filepath}.filt'], check=True)
 
         all_lines = mask_and_write_diff(ld, masks,lines, samps)
-        
+       
         logging.info('Masking to reference...')
         final_lines = mask2ref(all_lines, masks)
+        #can I delete all_lines
         logging.info('Writing results...')
 
         with open(f'{wd}{sample}.report','w') as o:
