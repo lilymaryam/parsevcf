@@ -10,6 +10,7 @@ task make_mask_and_diff {
 		File vcf
 		File tbmf
 		Int min_coverage
+		Boolean diffs = true
 		Boolean histograms = false
 
 		# runtime attributes
@@ -39,10 +40,17 @@ task make_mask_and_diff {
 		echo "Generating histograms..."
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
-	echo "Pulling script..."
-	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/1.0.4/vcf_to_diff_script.py
-	echo "Running script..."
-	python3 vcf_to_diff_script.py -v ~{vcf} -d . -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	if [[ "~{diffs}" = "true" ]]
+	then
+		echo "Pulling script..."
+		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/1.0.4/vcf_to_diff_script.py
+		echo "Running script..."
+		python3 vcf_to_diff_script.py -v ~{vcf} \
+		-d . \
+		-tbmf ~{tbmf} \
+		-cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph \
+		-cd ~{min_coverage}
+	fi
 	end=$(date +%s)
 	seconds=$(echo "$end - $start" | bc)
 	minutes=$(echo "$seconds" / 60 | bc)
@@ -92,7 +100,7 @@ task make_diff {
 	command <<<
 		set -eux pipefail
 		mkdir outs
-		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
+		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/1.0.4/vcf_to_diff_script.py
 		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{cf} -cd ~{cd}
 		ls -lha outs/
 	>>>
