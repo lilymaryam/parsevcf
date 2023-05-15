@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
 parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
 parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='path to bed file of commonly masked TB regions')
-parser.add_argument('-bed', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
+parser.add_argument('-bed', '--bedgraph', required=False, type=str, help="path to bed coverage file (bedgraph) for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="minimum coverage depth for any given call before that call is considered dubious")
 parser.add_argument('-l', '--logging', required=False, default=True, type=bool, help="if True, logging.debug verbose logging to diff.log, else suppress most logging")
 
@@ -16,7 +16,7 @@ args = parser.parse_args()
 vcf = args.VCF
 wd = args.working_directory
 tbmf = args.tb_maskfile
-bed = args.bed_coverage_file
+bed = args.bedgraph
 min_coverage = args.coverage_depth
 if args.logging is True:
     logging.basicConfig(filename=f"{os.path.basename(vcf[:-4])}.log", filemode='a', level=logging.DEBUG,
@@ -1268,7 +1268,7 @@ def missing_check(lenref, low_depth_sites):
     #how many low depth mask regions are there
     missing_count = 0
     for l in low_depth_sites:
-        missing_count += int(ld[l])-int(l)
+        missing_count += int(low_depth_sites[l])-int(l)
 
 
     #rules out samples that could never pass quality check no matter what 
