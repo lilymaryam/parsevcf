@@ -9,7 +9,7 @@ task make_mask_and_diff {
 		File bam
 		File vcf
 		File tbmf
-		Int min_coverage
+		Int min_coverage_per_site
 		Boolean diffs = true
 		Boolean histograms = false
 
@@ -33,8 +33,8 @@ task make_mask_and_diff {
 	samtools sort -u ~{basename_bam}.bam > sorted_u_~{basename_bam}.bam
 	echo "Calculating coverage..."
 	bedtools genomecov -ibam sorted_u_~{basename_bam}.bam -bga | \
-		awk '$4 < ~{min_coverage}' > \
-		~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph
+		awk '$4 < ~{min_coverage_per_site}' > \
+		~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph
 	if [[ "~{histograms}" = "true" ]]
 	then
 		echo "Generating histograms..."
@@ -48,8 +48,8 @@ task make_mask_and_diff {
 		python3 vcf_to_diff_script.py -v ~{vcf} \
 		-d . \
 		-tbmf ~{tbmf} \
-		-cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph \
-		-cd ~{min_coverage}
+		-cf ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
+		-cd ~{min_coverage_per_site}
 	fi
 	end=$(date +%s)
 	seconds=$(echo "$end - $start" | bc)
@@ -72,7 +72,7 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File mask_file = basename_bam+"_below_"+min_coverage+"x_coverage.bedgraph"
+		File mask_file = basename_bam+"_below_"+min_coverage_per_site+"x_coverage.bedgraph"
 		File? diff = basename_vcf+".diff"
 		File? report = basename_vcf+".report"
 		File? histogram = "histogram.txt"
