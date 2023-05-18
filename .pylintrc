@@ -1,0 +1,11 @@
+[MESSAGES CONTROL]
+  disable= 
+    logging-fstring-interpolation,
+    logging-too-many-args,
+    line-too-long,
+    trailing-whitespace,
+    consider-using-sys-exit,
+    unspecified-encoding,
+    too-many-nested-blocks,
+    redefined-outer-name,
+    invalid-name
