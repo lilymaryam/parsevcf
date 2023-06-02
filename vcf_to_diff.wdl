@@ -44,7 +44,7 @@ task make_mask_and_diff {
 	if [[ "~{diffs}" = "true" ]]
 	then
 		echo "Pulling script..."
-		wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.7/vcf_to_diff_script.py
+		wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.8/vcf_to_diff_script.py
 		echo "Running script..."
 		python3 vcf_to_diff_script.py -v ~{vcf} \
 		-d . \
