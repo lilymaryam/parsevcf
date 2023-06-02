@@ -8,7 +8,7 @@ task make_mask_and_diff {
 	input {
 		File bam
 		File vcf
-		File tbmf
+		File? tbmf
 		Int min_coverage_per_site
 		Boolean diffs = true
 		Boolean histograms = false
@@ -23,6 +23,7 @@ task make_mask_and_diff {
 	String basename_bam = basename(bam, ".bam")
 	String basename_vcf = basename(vcf, ".vcf")
 	Int finalDiskSize = ceil(size(bam, "GB")*2) + ceil(size(vcf, "GB")*2) + addldisk
+	String mask = select_first([tbmf, "/mask/R00000039_repregions.bed"])
 	
 	command <<<
 	set -eux pipefail
@@ -43,11 +44,11 @@ task make_mask_and_diff {
 	if [[ "~{diffs}" = "true" ]]
 	then
 		echo "Pulling script..."
-		wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.7/vcf_to_diff_script.py
+		wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.8/vcf_to_diff_script.py
 		echo "Running script..."
 		python3 vcf_to_diff_script.py -v ~{vcf} \
 		-d . \
-		-tbmf ~{tbmf} \
+		-tbmf ~{mask} \
 		-bed ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
 		-cd ~{min_coverage_per_site}
 	fi
@@ -60,7 +61,7 @@ task make_mask_and_diff {
 
 	runtime {
 		cpu: cpu
-		docker: "ashedpotatoes/sranwrp:1.1.6"
+		docker: "ashedpotatoes/sranwrp:1.1.12"
 		disks: "local-disk " + finalDiskSize + " HDD"
 		maxRetries: "${retries}"
 		memory: "${memory} GB"
