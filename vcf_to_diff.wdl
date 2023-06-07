@@ -73,7 +73,7 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File mask_file = basename_bam+"_below_"+min_coverage_per_site+"x_coverage.bedgraph"
+		File mask_file = basename_bam+"_below_"+min_coverage_per_site+"x_coverage.bedgraph"  # !StringCoercion
 		File? diff = basename_vcf+".diff"
 		File? report = basename_vcf+".report"
 		File? histogram = "histogram.txt"
