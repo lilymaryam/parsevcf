@@ -23,24 +23,41 @@ task make_mask_and_diff {
 	String basename_bam = basename(bam, ".bam")
 	String basename_vcf = basename(vcf, ".vcf")
 	Int finalDiskSize = ceil(size(bam, "GB")*2) + ceil(size(vcf, "GB")*2) + addldisk
-	String mask = select_first([tbmf, "/mask/R00000039_repregions.bed"])
 	
 	command <<<
 	set -eux pipefail
 	start=$(date +%s)
+
+	# We want the mask file the user input, if it exists, to be the mask file, else
+	# fall back on a default mask file that exists in the Docker image already.
+	# We cannot use WDL built-in select_first, or else the user inputting a mask file
+	# will result in WDL looking for the literal gs:// URI rather than while the file
+	# is localized. Different WDL executors localize files to different places, so the
+	# following workaround, while goofy, seems to be the most robust.
+	if [[ "~{tbmf}" = "" ]]
+	then
+		mask="/mask/R00000039_repregions.bed"
+	else
+		mask="~{tbmf}"
+	fi
+	
 	echo "Copying bam..."
 	cp ~{bam} .
+	
 	echo "Sorting bam..."
 	samtools sort -u ~{basename_bam}.bam > sorted_u_~{basename_bam}.bam
+	
 	echo "Calculating coverage..."
 	bedtools genomecov -ibam sorted_u_~{basename_bam}.bam -bga | \
 		awk '$4 < ~{min_coverage_per_site}' > \
 		~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph
+	
 	if [[ "~{histograms}" = "true" ]]
 	then
 		echo "Generating histograms..."
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
+	
 	if [[ "~{diffs}" = "true" ]]
 	then
 		echo "Pulling script..."
@@ -48,7 +65,7 @@ task make_mask_and_diff {
 		echo "Running script..."
 		python3 vcf_to_diff_script.py -v ~{vcf} \
 		-d . \
-		-tbmf ~{mask} \
+		-tbmf ${mask} \
 		-bed ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
 		-cd ~{min_coverage_per_site}
 	fi
