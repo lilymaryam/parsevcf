@@ -8,8 +8,9 @@ task make_mask_and_diff {
 	input {
 		File bam
 		File vcf
-		File tbmf
-		Int min_coverage
+		File? tbmf
+		Int min_coverage_per_site
+		Boolean diffs = true
 		Boolean histograms = false
 
 		# runtime attributes
@@ -25,23 +26,59 @@ task make_mask_and_diff {
 	
 	command <<<
 	set -eux pipefail
+	start=$(date +%s)
+
+	# We want the mask file the user input, if it exists, to be the mask file, else
+	# fall back on a default mask file that exists in the Docker image already.
+	# We cannot use WDL built-in select_first, or else the user inputting a mask file
+	# will result in WDL looking for the literal gs:// URI rather than while the file
+	# is localized. Different WDL executors localize files to different places, so the
+	# following workaround, while goofy, seems to be the most robust.
+	if [[ "~{tbmf}" = "" ]]
+	then
+		mask="/mask/R00000039_repregions.bed"
+	else
+		mask="~{tbmf}"
+	fi
+	
+	echo "Copying bam..."
 	cp ~{bam} .
+	
+	echo "Sorting bam..."
 	samtools sort -u ~{basename_bam}.bam > sorted_u_~{basename_bam}.bam
+	
+	echo "Calculating coverage..."
 	bedtools genomecov -ibam sorted_u_~{basename_bam}.bam -bga | \
-		awk '$4 < ~{min_coverage}' > \
-		~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph
+		awk '$4 < ~{min_coverage_per_site}' > \
+		~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph
+	
 	if [[ "~{histograms}" = "true" ]]
 	then
+		echo "Generating histograms..."
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
-	wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
-	python3 vcf_to_diff_script.py -v ~{vcf} -d . -tbmf ~{tbmf} -cf ~{basename_bam}_below_~{min_coverage}x_coverage.bedgraph -cd ~{min_coverage}
+	
+	if [[ "~{diffs}" = "true" ]]
+	then
+		echo "Pulling script..."
+		wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.8/vcf_to_diff_script.py
+		echo "Running script..."
+		python3 vcf_to_diff_script.py -v ~{vcf} \
+		-d . \
+		-tbmf ${mask} \
+		-bed ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
+		-cd ~{min_coverage_per_site}
+	fi
+	end=$(date +%s)
+	seconds=$(echo "$end - $start" | bc)
+	minutes=$(echo "$seconds" / 60 | bc)
+	echo "Finished in about $minutes minutes ($seconds sec))"
 	ls -lha
 	>>>
 
 	runtime {
 		cpu: cpu
-		docker: "ashedpotatoes/sranwrp:1.1.6"
+		docker: "ashedpotatoes/sranwrp:1.1.12"
 		disks: "local-disk " + finalDiskSize + " HDD"
 		maxRetries: "${retries}"
 		memory: "${memory} GB"
@@ -53,9 +90,9 @@ task make_mask_and_diff {
 	}
 
 	output {
-		File diff = basename_vcf+".diff"
-		File report = basename_vcf+".report"
-		File mask_file = basename_bam+"_below_"+min_coverage+"x_coverage.bedgraph"
+		File mask_file = basename_bam+"_below_"+min_coverage_per_site+"x_coverage.bedgraph"  # !StringCoercion
+		File? diff = basename_vcf+".diff"
+		File? report = basename_vcf+".report"
 		File? histogram = "histogram.txt"
 	}
 }
@@ -81,7 +118,7 @@ task make_diff {
 	command <<<
 		set -eux pipefail
 		mkdir outs
-		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/4f75a07b3babfc5c9e0439430925de48171a8fc7/vcf_to_diff_script.py
+		wget https://raw.githubusercontent.com/lilymaryam/parsevcf/1.0.4/vcf_to_diff_script.py
 		python3.10 vcf_to_diff_script.py -v ~{vcf} -d ./outs/ -tbmf ~{tbmf} -cf ~{cf} -cd ~{cd}
 		ls -lha outs/
 	>>>

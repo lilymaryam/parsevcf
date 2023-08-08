@@ -7,21 +7,21 @@ import subprocess
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
 parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-cf', '--bed_coverage_file', required=False, type=str, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
-parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="path to bed coverage file for vcf (note: can only be used with single-sample vcfs)")
+parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='path to bed file of commonly masked TB regions')
+parser.add_argument('-bed', '--bedgraph', required=False, type=str, help="path to bed coverage file (bedgraph) for vcf (note: can only be used with single-sample vcfs)")
+parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="minimum coverage depth for any given call before that call is considered dubious")
 parser.add_argument('-l', '--logging', required=False, default=True, type=bool, help="if True, logging.debug verbose logging to diff.log, else suppress most logging")
 
 args = parser.parse_args()
 vcf = args.VCF
 wd = args.working_directory
 tbmf = args.tb_maskfile
-cf = args.bed_coverage_file
-cd = args.coverage_depth
+bed = args.bedgraph
+min_coverage = args.coverage_depth
 if args.logging is True:
     logging.basicConfig(filename=f"{os.path.basename(vcf[:-4])}.log", filemode='a', level=logging.DEBUG,
         format="%(asctime)s %(funcName)s@%(lineno)d::%(levelname)s: %(message)s", datefmt="%I:%M:%S %p")
-    logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tcf={cf}\n\tcd={cd}\n\tl={args.logging}")
+    logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tbed={bed}\n\tmin_coverage={min_coverage}\n\tl={args.logging}")
 else:
     logging.basicConfig(level=logging.WARNING)
 
@@ -115,20 +115,20 @@ def mask_TB(tbmf):
             tb_sites[int(line[1])+1] = int(line[2])+1
     return tb_sites
 
-def mask_low_depth(cf, cd):
+def mask_low_depth(bed, min_coverage):
     '''
     read bed coverage file and generate sites to be masked 
     note: if coverage does not have HR37c reference it will throw an error (this can be changed)
     note: bed files are 0-indexed in col1 and 1-indexed in col2, i am adding one to both to make them both one indexed
     Args: 
-        cf: path to bed coverage file 
-        cd: integer indicating coverage depth needed 
+        bed: path to bed coverage file 
+        min_coverage: integer indicating coverage depth needed 
     out:
-        ld_sites: dictionary of low-depth sites needing to be masked 
+        low_depth_sites: dictionary of low-depth sites needing to be masked 
     '''
-    ld_sites = {}
+    low_depth_sites = {}
     prev = None
-    with open(cf) as cf:
+    with open(bed) as cf:
         for line in cf:
             #might need to delete or change this
             #for currect bed coverage file 
@@ -137,34 +137,34 @@ def mask_low_depth(cf, cd):
                 #re-index to match VCF
                 line[1] = str(int(line[1])+1)
                 line[2] = str(int(line[2])+1)
-                #if the coverage is below cd
-                if int(line[3]) < cd:
+                #if the coverage is below min_coverage
+                if int(line[3]) < min_coverage:
                     if prev == None:
                         #for first low-coverage line in file
-                        ld_sites[int(line[1])] = int(line[2])
+                        low_depth_sites[int(line[1])] = int(line[2])
                         prev = [int(line[1]), int(line[2])]
                     else:
                         #for all subsequent low-coverage lines, determine if they can be combined 
                         #if start of line is the same as the end of prev
                         if int(line[1]) == prev[1]:
                             #combine sites and update prev
-                            ld_sites[prev[0]] = int(line[2])
+                            low_depth_sites[prev[0]] = int(line[2])
                             prev[1] = int(line[2])
                         #create a new site and update prev
                         else:
-                            ld_sites[int(line[1])] = int(line[2])
+                            low_depth_sites[int(line[1])] = int(line[2])
                             prev = [int(line[1]), int(line[2])]
     #this conditional might need to be fixed if there are no low-coverage areas
-    if ld_sites == {}:
+    if low_depth_sites == {}:
         raise Exception('coverage file has incorrect reference')
 
-    return ld_sites
+    return low_depth_sites
 
 """
 NOT FOR USE WITH UNIVERSAL MASK2REF
 def check_prev_mask(prev, line):
     '''
-    when merging ld and tb masks, make sure the masks are not overlapping with previously added masks
+    when merging low depth and tb masks, make sure the masks are not overlapping with previously added masks
     Args:
         prev: a list of the start and stop of the previously added mask region 
         line: a list of the start and stop of the to-be-added mask region
@@ -201,18 +201,18 @@ def check_prev_mask(prev, line):
     return overlap, change
 
 
-def condense_mask_regions(ld_sites,tb_sites):
+def condense_mask_regions(low_depth_sites,tb_sites):
     '''
     for instances with low-depth masking, combine low-depth masks and universal masks into a single data structure 
     Args: 
-        ld_sites: a dictionary containing low-depth sites to be masked
+        low_depth_sites: a dictionary containing low-depth sites to be masked
         tb_sites: a dictionary containing universal masking sites 
     Output:
         all_sites: a dictionary containing all masking sites from both universal and low-depth
     '''
     #editing thought: would likely benefit from being a list rather than a dictionary 
     tb_keys = sorted(tb_sites.keys())
-    ld_keys = sorted(ld_sites.keys())
+    ld_keys = sorted(low_depth_sites.keys())
     all_sites = {}
     tb_keys_ind = 0
     ld_keys_ind = 0
@@ -227,7 +227,7 @@ def condense_mask_regions(ld_sites,tb_sites):
             tb_start = tb_keys[tb_keys_ind]
             tb_end =  tb_sites[tb_keys[tb_keys_ind]]
             ld_start = ld_keys[ld_keys_ind]
-            ld_end = ld_sites[ld_keys[ld_keys_ind]]
+            ld_end = low_depth_sites[ld_keys[ld_keys_ind]]
 
             if ld_start < tb_start:
                 if ld_end < tb_start:
@@ -312,14 +312,14 @@ def condense_mask_regions(ld_sites,tb_sites):
             #covered all 6 possible positions of the two regions
             '''
             DEBUG
-            logging.debug('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+            logging.debug('ld',ld_keys[ld_keys_ind], low_depth_sites[ld_keys[ld_keys_ind]])
             '''
 
         #possible bug: prev overlaps with one list the first time the other list expires
         elif tb_keys_ind >= len(tb_keys) and ld_keys_ind < len(ld_keys):
             #if reach end of tb_masks process ld only
             ld_start = ld_keys[ld_keys_ind]
-            ld_end = ld_sites[ld_keys[ld_keys_ind]]
+            ld_end = low_depth_sites[ld_keys[ld_keys_ind]]
             all_sites[ld_start] = ld_end
             ld_keys_ind += 1
 
@@ -394,7 +394,7 @@ def vcf_to_diff(vcf_file):
     Args: 
         vcf_file: uncompressed single sample vcf 
     Outputs:
-        newlines: a list of diff-formatted lines for the file
+        diff_formatted_lines: a list of diff-formatted lines for the file
     ''' 
     lines = []
     with open(vcf_file, 'rt') as v:
@@ -520,8 +520,8 @@ def vcf_to_diff(vcf_file):
                                 lines.append(newline)
     
     #compress adjacent diff lines where possible 
-    newLines = squish(lines)
-    return newLines
+    diff_formatted_lines = squish(lines)
+    return diff_formatted_lines
 
 def make_files(samps,wd):
     '''
@@ -784,11 +784,11 @@ def check_prev_line(prev, line):
 
 #def interpret_overlap()  
 
-def mask_and_write_diff(ld, tb_masks, lines, samps):
+def mask_and_write_diff(low_depth_sites, tb_masks, lines, samps):
     '''
     iterate through masking regions and lines of diff file to mask positions
     args:
-        ld: a dictionary of low depth coverage regions 
+        low_depth_sites: a dictionary of low depth coverage regions 
         tb_masks: a dictionary of universally masked regions
         lines: a list of diff-formatted lines 
         samps: a list of sample names from the VCF
@@ -796,14 +796,14 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
         all_lines: a list of diff-formatted lines including all of the masked regions
     '''
     
-    #if ld != None:
+    #if low_depth_sites != None:
     #    assert len(samps) == 1
-    #    masks = condense_mask_regions(ld,tb_masks)
+    #    masks = condense_mask_regions(low_depth_sites,tb_masks)
         
     #else:
     #    masks = tb_masks
-    masks = ld
-    masks_key = sorted(ld.keys())
+    masks = low_depth_sites
+    masks_key = sorted(low_depth_sites.keys())
     logging.info("Masking the diff file...")
     logging.debug(f'masks: {masks_key} {masks}')
     
@@ -952,7 +952,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
 
             else:
                 logging.debug('other... what else could happen?')
-                #logging.debug('ld',ld_start, ld_end, 'tb', tb_start, tb_end)
+                #logging.debug('low_depth_sites',ld_start, ld_end, 'tb', tb_start, tb_end)
                 #all_sites[tb_start]
 
 
@@ -960,7 +960,7 @@ def mask_and_write_diff(ld, tb_masks, lines, samps):
                 #logging.debug('ld', ld_start, ld_end)
                 #logging.debug('tb', tb_start, tb_end)
             #logging.debug('tb',tb_keys[tb_keys_ind], tb_sites[tb_keys[tb_keys_ind]])
-            #logging.debug('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+            #logging.debug('ld',ld_keys[ld_keys_ind], low_depth_sites[ld_keys[ld_keys_ind]])
         
         elif masks_ind >= len(masks_key) and lines_ind < len(lines):
             #after mask list is completely read
@@ -1185,14 +1185,14 @@ def mask2ref(lines, tb_masks):
             #covered all 6 possible positions of the two regions
             '''
             DEBUG
-            logging.debug('ld',ld_keys[ld_keys_ind], ld_sites[ld_keys[ld_keys_ind]])
+            logging.debug('ld',ld_keys[ld_keys_ind], low_depth_sites[ld_keys[ld_keys_ind]])
             '''
 
         #possible bug: prev overlaps with one list the first time the other list expires
         elif tb_keys_ind >= len(tb_keys) and ld_keys_ind < len(ld_keys):
             #if reach end of tb_masks process ld only
             ld_start = ld_keys[ld_keys_ind]
-            ld_end = ld_sites[ld_keys[ld_keys_ind]]
+            ld_end = low_depth_sites[ld_keys[ld_keys_ind]]
             all_sites[ld_start] = ld_end
             ld_keys_ind += 1
 
@@ -1237,14 +1237,14 @@ def mask2ref(lines, tb_masks):
 #note: future iterations of this software may include missing sites in VCF but that is not currently included
 #note: future iterations of this software may determine if universal mask sites overlap with low-coverage sites 
 # but that is not currently included
-def missing_check(lenref, ld):
+def missing_check(lenref, low_depth_sites):
     '''
     determine what percentage of genome length is low-coverage
     Args:
         lenref: len of reference genome 
-        ld: dictionary of low-depth regions 
+        low_depth_sites: dictionary of low-depth regions 
     Out:
-        missing_count/lenref: a float value <1 indicating the percentage of genome 
+        amount_low_coverage_sites: a float value <1 indicating the percentage of genome 
     '''
     #NOT CURRENTLY NEEDED 
     #how many missing lines ended up in VCF
@@ -1253,7 +1253,7 @@ def missing_check(lenref, ld):
     #    miss_total += len(line[3])
 
     #calculate in main part of script?
-    #ld = mask_low_depth(cf,cd)
+    #low_depth_sites = mask_low_depth(bed,min_coverage)
 
     #NOT CURRENTLY NECESSARY
     #how many universal mask regions are there
@@ -1267,8 +1267,8 @@ def missing_check(lenref, ld):
 
     #how many low depth mask regions are there
     missing_count = 0
-    for l in ld:
-        missing_count += int(ld[l])-int(l)
+    for l in low_depth_sites:
+        missing_count += int(low_depth_sites[l])-int(l)
 
 
     #rules out samples that could never pass quality check no matter what 
@@ -1283,8 +1283,9 @@ def missing_check(lenref, ld):
     #FOR ALL BORDERLINE SAMPLES (IS THIS NECESSARY?)
     #logging.debug('pass')
 
-    logging.info(f"{missing_count/lenref} % of the genome seems to be low-coverage.")
-    return missing_count/lenref
+    amount_low_coverage_sites=missing_count/lenref
+    logging.info(f"{amount_low_coverage_sites * 100} % of the genome seems to be low-coverage.")
+    return amount_low_coverage_sites
                 
 
 
@@ -1298,7 +1299,7 @@ if __name__ == "__main__":
         except OSError:
             binary = False
 
-    logging.info("Reading vcf and masks...")
+    logging.info("Reading vcf...")
     if binary == True:
         lenRow, samps = count_samples_bin(vcf)
     else:
@@ -1309,46 +1310,38 @@ if __name__ == "__main__":
 
     if binary == True:
         read_VCF_bin(vcf, files)
-        
     else:
         read_VCF(vcf, files)
 
-    logging.info("Masking...")
-        
+    logging.info("Masking known-to-be-ornery sites...")
     masks = mask_TB(tbmf)
     #this is not parallelized, the more samples in the vcf the longer this will take
-    #logging.debug(files)
-    #logging.debug(masks)
+    #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
 
     for f in files:
-        #files[f].close()
         print('files', files)
         logging.debug(f"For {f} in {files}")
 
-        #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
         #find low coverage regions for each sample 
-        if cf != None:
-            ld = mask_low_depth(cf,cd)
+        if bed != None:
+            low_depth_sites = mask_low_depth(bed,min_coverage)
         else:
-            ld = None
+            low_depth_sites = None
 
         sample = os.path.basename(files[f])[:-4]
         logging.info(f'Working on sample {sample}')
         filepath = files[f]
-        #logging.debug(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}")
         subprocess.run(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}", shell=True, check=True)
-        
-        #os.system(f"rm {filepath}") # deleting the VCF isn't necessary
 
-        #currently quality assessment requires a coverage file, if not coverage is provided the script will fail 
-        error = missing_check(len_ref, ld)
+        #currently quality assessment requires a coverage file, if coverage not provided the script will fail 
+        low_coverage_as_fraction = missing_check(len_ref, low_depth_sites)
 
-        #if there is a provided coverage file it will be used to mask low coverage (less than cd) regions 
+        #if there is a provided coverage file it will be used to mask low coverage (less than min_coverage) regions 
         #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
-        lines = vcf_to_diff(f'{filepath}.filt')
+        diff_formatted_lines = vcf_to_diff(f'{filepath}.filt')
         subprocess.run(['rm', f'{filepath}.filt'], check=True)
 
-        all_lines = mask_and_write_diff(ld, masks,lines, samps)
+        all_lines = mask_and_write_diff(low_depth_sites, masks, diff_formatted_lines, samps)
        
         logging.info('Masking to reference...')
         final_lines = mask2ref(all_lines, masks)
@@ -1356,7 +1349,7 @@ if __name__ == "__main__":
         logging.info('Writing results...')
 
         with open(f'{wd}{sample}.report','w') as o:
-            o.write(f'{sample}.diff\t{error}\t{cd}\n')
+            o.write(f'{sample}.diff\t{low_coverage_as_fraction}\t{min_coverage}\n')
         with open(f'{wd}{sample}.diff','w') as o:
             for line in final_lines:
                 o.write('\t'.join(line)+'\n')
