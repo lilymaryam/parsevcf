@@ -11,7 +11,7 @@ task make_mask_and_diff {
 		File? tbmf
 		Int min_coverage_per_site
 		Boolean histograms = false
-		Float discard_sample_if_
+		Float discard_sample_if_more_than_this_percent_is_low_coverage # for sra, default was 0.05
 
 		# runtime attributes
 		Int addldisk = 10
@@ -67,8 +67,30 @@ task make_mask_and_diff {
 	-bed ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
 	-cd ~{min_coverage_per_site}
 	
+	# if the sample has too many low coverage sites, throw it out
+	this_files_info=$(awk -v file_to_check="~{basename_vcf}.diff" '$1 == file_to_check' "~{basename_vcf}.report")
+	if [[ ! "$this_files_info" = "" ]]
+	then
+		# okay, we have information about this file. is it above the removal threshold?
+		echo "$this_files_info" > temp
+		amount_low_coverage=$(cut -f2 temp)
+		percent_low_coverage=$(echo "$amount_low_coverage"*100 | bc)
+		echo "$percent_low_coverage percent of ~{basename_vcf} is below ~{min_coverage_per_site}."
+		
+		# piping an inequality to `bc` will return 0 if false, 1 if true
+		is_bigger=$(echo "$amount_low_coverage>~{discard_sample_if_more_than_this_percent_is_low_coverage}" | bc)
+		if [[ $is_bigger == 0 ]]
+		then
+			# amount of low coverage is BELOW the removal threshold and passes
+			echo "PASS" >> ERROR
 	
-	
+		else
+			# amount of low coverage is ABOVE the removal threshold and fails
+			echo FAILURE - "$percent_low_coverage" is above "~{discard_sample_if_more_than_this_percent_is_low_coverage}" cutoff
+			echo VCF2DIFF_"$percent_low_coverage"_PCT_BELOW_"~{min_coverage_per_site}"x_COVERAGE >> ERROR
+		fi
+	fi
+			
 	end=$(date +%s)
 	seconds=$(echo "$end - $start" | bc)
 	minutes=$(echo "$seconds" / 60 | bc)
@@ -94,6 +116,7 @@ task make_mask_and_diff {
 		File? diff = basename_vcf+".diff"
 		File? report = basename_vcf+".report"
 		File? histogram = "histogram.txt"
+		String errorcode = read_string("ERROR")
 	}
 }
 
