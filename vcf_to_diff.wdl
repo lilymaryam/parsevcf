@@ -10,8 +10,8 @@ task make_mask_and_diff {
 		File vcf
 		File? tbmf
 		Int min_coverage_per_site
-		Boolean diffs = true
 		Boolean histograms = false
+		Float discard_sample_if_
 
 		# runtime attributes
 		Int addldisk = 10
@@ -58,17 +58,17 @@ task make_mask_and_diff {
 		bedtools genomecov -ibam sorted_u_~{basename_bam}.bam > histogram.txt
 	fi
 	
-	if [[ "~{diffs}" = "true" ]]
-	then
-		echo "Pulling script..."
-		wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.8/vcf_to_diff_script.py
-		echo "Running script..."
-		python3 vcf_to_diff_script.py -v ~{vcf} \
-		-d . \
-		-tbmf ${mask} \
-		-bed ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
-		-cd ~{min_coverage_per_site}
-	fi
+	echo "Pulling diff script..."
+	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.8/vcf_to_diff_script.py
+	echo "Running script..."
+	python3 vcf_to_diff_script.py -v ~{vcf} \
+	-d . \
+	-tbmf ${mask} \
+	-bed ~{basename_bam}_below_~{min_coverage_per_site}x_coverage.bedgraph \
+	-cd ~{min_coverage_per_site}
+	
+	
+	
 	end=$(date +%s)
 	seconds=$(echo "$end - $start" | bc)
 	minutes=$(echo "$seconds" / 60 | bc)
