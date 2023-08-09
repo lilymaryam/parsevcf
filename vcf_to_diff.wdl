@@ -7,11 +7,12 @@ task make_mask_and_diff {
 	# The masking part of this task is based on github.com/aofarrel/mask-by-coverage
 	input {
 		File bam
-		File vcf
-		File? tbmf
-		Int min_coverage_per_site
+		Boolean force_diff = false
 		Boolean histograms = false
-		Float discard_sample_if_more_than_this_percent_is_low_coverage # for sra, default was 0.05
+		Int min_coverage_per_site
+		Float min_porportion_low_coverage_per_sample # for sra, default was 0.05
+		File? tbmf
+		File vcf
 
 		# runtime attributes
 		Int addldisk = 10
@@ -23,6 +24,16 @@ task make_mask_and_diff {
 	String basename_bam = basename(bam, ".bam")
 	String basename_vcf = basename(vcf, ".vcf")
 	Int finalDiskSize = ceil(size(bam, "GB")*2) + ceil(size(vcf, "GB")*2) + addldisk
+
+	parameter_meta {
+		bam: "BAM file for this sample"
+		force_diff: "Output a diff file even if sample is discarded for being below min_porportion_low_coverage_per_sample"
+		histograms: "Generate histogram output"
+		min_coverage_per_site: "Positions with coverage below this value will be masked in diff files"
+		min_porportion_low_coverage_per_sample: "If less than this percent (0.5 = 50%) of a sample's sites get masked due to being below min_coverage_per_site, discard the entire sample"
+		tbmf: "BED file of regions of the genome you always want to mask (default: R00000039_repregions.bed)"
+		vcf: "VCF file for this sample"
+	}
 	
 	command <<<
 	set -eux pipefail
@@ -78,15 +89,19 @@ task make_mask_and_diff {
 		echo "$percent_low_coverage percent of ~{basename_vcf} is below ~{min_coverage_per_site}."
 		
 		# piping an inequality to `bc` will return 0 if false, 1 if true
-		is_bigger=$(echo "$amount_low_coverage>~{discard_sample_if_more_than_this_percent_is_low_coverage}" | bc)
+		is_bigger=$(echo "$amount_low_coverage>~{min_porportion_low_coverage_per_sample}" | bc)
 		if [[ $is_bigger == 0 ]]
 		then
-			# amount of low coverage is BELOW the removal threshold and passes
+			# amount of low coverage is BELOW the removal threshold: sample passes
 			echo "PASS" >> ERROR
 	
 		else
-			# amount of low coverage is ABOVE the removal threshold and fails
-			echo FAILURE - "$percent_low_coverage" is above "~{discard_sample_if_more_than_this_percent_is_low_coverage}" cutoff
+			# amount of low coverage is ABOVE the removal threshold: sample fails
+			if [[ "~{force_diff}" == "false" ]]
+			then
+				rm "~{basename_vcf}.diff"
+			fi
+			echo FAILURE - "$percent_low_coverage" is above "~{min_porportion_low_coverage_per_sample}" cutoff
 			echo VCF2DIFF_"$percent_low_coverage"_PCT_BELOW_"~{min_coverage_per_site}"x_COVERAGE >> ERROR
 		fi
 	fi
