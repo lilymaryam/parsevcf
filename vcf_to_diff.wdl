@@ -9,8 +9,8 @@ task make_mask_and_diff {
 		File bam
 		Boolean force_diff = false
 		Boolean histograms = false
+		Float max_ratio_low_coverage_sites_per_sample # for sra, default was 0.05
 		Int min_coverage_per_site
-		Float min_porportion_low_coverage_per_sample # for sra, default was 0.05
 		File? tbmf
 		File vcf
 
@@ -27,10 +27,10 @@ task make_mask_and_diff {
 
 	parameter_meta {
 		bam: "BAM file for this sample"
-		force_diff: "Output a diff file even if sample is discarded for being below min_porportion_low_coverage_per_sample"
+		force_diff: "Output a diff file even if sample is discarded for being below min_proportion_low_coverage_per_sample"
 		histograms: "Generate histogram output"
+		max_ratio_low_coverage_sites_per_sample: "If over this percent (0.5 = 50%) of a sample's sites get masked due to being below min_coverage_per_site, discard the entire sample"
 		min_coverage_per_site: "Positions with coverage below this value will be masked in diff files"
-		min_porportion_low_coverage_per_sample: "If less than this percent (0.5 = 50%) of a sample's sites get masked due to being below min_coverage_per_site, discard the entire sample"
 		tbmf: "BED file of regions of the genome you always want to mask (default: R00000039_repregions.bed)"
 		vcf: "VCF file for this sample"
 	}
@@ -86,10 +86,10 @@ task make_mask_and_diff {
 		echo "$this_files_info" > temp
 		amount_low_coverage=$(cut -f2 temp)
 		percent_low_coverage=$(echo "$amount_low_coverage"*100 | bc)
-		echo "$percent_low_coverage percent of ~{basename_vcf} is below ~{min_coverage_per_site}."
+		echo "$percent_low_coverage percent of ~{basename_vcf} is below ~{min_coverage_per_site}x coverage."
 		
 		# piping an inequality to `bc` will return 0 if false, 1 if true
-		is_bigger=$(echo "$amount_low_coverage>~{min_porportion_low_coverage_per_sample}" | bc)
+		is_bigger=$(echo "$amount_low_coverage>~{max_ratio_low_coverage_sites_per_sample}" | bc)
 		if [[ $is_bigger == 0 ]]
 		then
 			# amount of low coverage is BELOW the removal threshold: sample passes
@@ -101,8 +101,9 @@ task make_mask_and_diff {
 			then
 				rm "~{basename_vcf}.diff"
 			fi
-			echo FAILURE - "$percent_low_coverage" is above "~{min_porportion_low_coverage_per_sample}" cutoff
-			echo VCF2DIFF_"$percent_low_coverage"_PCT_BELOW_"~{min_coverage_per_site}"x_COVERAGE >> ERROR
+			pretty_percent=$(printf "%0.2f" "$percent_low_coverage")
+			echo FAILURE - "$pretty_percent""%" is above "~{max_ratio_low_coverage_sites_per_sample}""%" cutoff
+			echo VCF2DIFF_"$pretty_percent"_PCT_BELOW_"~{min_coverage_per_site}"x_COVERAGE >> ERROR
 		fi
 	fi
 			
@@ -135,7 +136,7 @@ task make_mask_and_diff {
 	}
 }
 
-task make_diff {
+task make_diff_legacy {
 	input {
 		File vcf
 		File tbmf
