@@ -136,6 +136,100 @@ task make_mask_and_diff {
 	}
 }
 
+task make_diff_from_vcf_and_mask {
+	input {
+		File vcf
+		File? tbmf
+		Float max_ratio_low_coverage_sites_per_sample = 0.05
+		Boolean force_diff = false
+		Int min_coverage_per_site = 10
+		File bedgraph
+		
+		# runtime attributes
+		Int addldisk = 10
+		Int cpu      = 8
+		Int retries  = 1
+		Int memory   = 16
+		Int preempt  = 1
+	}
+	String basename_vcf = basename(vcf, ".vcf")
+	Int finalDiskSize = ceil(size(bedgraph, "GB")*2) + ceil(size(vcf, "GB")*2) + addldisk
+	
+	command <<<
+	set -eux pipefail
+
+	# We want the mask file the user input, if it exists, to be the mask file, else
+	# fall back on a default mask file that exists in the Docker image already.
+	# We cannot use WDL built-in select_first, or else the user inputting a mask file
+	# will result in WDL looking for the literal gs:// URI rather than while the file
+	# is localized. Different WDL executors localize files to different places, so the
+	# following workaround, while goofy, seems to be the most robust.
+	if [[ "~{tbmf}" = "" ]]
+	then
+		mask="/mask/R00000039_repregions.bed"
+	else
+		mask="~{tbmf}"
+	fi
+	
+	echo "Pulling diff script..."
+	wget https://raw.githubusercontent.com/aofarrel/parsevcf/1.1.8/vcf_to_diff_script.py
+	echo "Running script..."
+	python3 vcf_to_diff_script.py -v ~{vcf} \
+	-d . \
+	-tbmf ${mask} \
+	-bed ~{bedgraph} \
+	-cd ~{min_coverage_per_site}
+	
+	# if the sample has too many low coverage sites, throw it out
+	this_files_info=$(awk -v file_to_check="~{basename_vcf}.diff" '$1 == file_to_check' "~{basename_vcf}.report")
+	if [[ ! "$this_files_info" = "" ]]
+	then
+		# okay, we have information about this file. is it above the removal threshold?
+		echo "$this_files_info" > temp
+		amount_low_coverage=$(cut -f2 temp)
+		percent_low_coverage=$(echo "$amount_low_coverage"*100 | bc)
+		echo "$percent_low_coverage percent of ~{basename_vcf} is below ~{min_coverage_per_site}x coverage."
+		
+		# piping an inequality to `bc` will return 0 if false, 1 if true
+		is_bigger=$(echo "$amount_low_coverage>~{max_ratio_low_coverage_sites_per_sample}" | bc)
+		if [[ $is_bigger == 0 ]]
+		then
+			# amount of low coverage is BELOW the removal threshold: sample passes
+			echo "PASS" >> ERROR
+	
+		else
+			# amount of low coverage is ABOVE the removal threshold: sample fails
+			if [[ "~{force_diff}" == "false" ]]
+			then
+				rm "~{basename_vcf}.diff"
+			fi
+			pretty_percent=$(printf "%0.2f" "$percent_low_coverage")
+			echo FAILURE - "$pretty_percent""%" is above "~{max_ratio_low_coverage_sites_per_sample}""%" cutoff
+			echo VCF2DIFF_"$pretty_percent"_PCT_BELOW_"~{min_coverage_per_site}"x_COVERAGE >> ERROR
+		fi
+	fi
+	>>>
+	
+	runtime {
+		cpu: cpu
+		docker: "ashedpotatoes/sranwrp:1.1.12"
+		disks: "local-disk " + finalDiskSize + " HDD"
+		maxRetries: "${retries}"
+		memory: "${memory} GB"
+		preemptible: "${preempt}"
+	}
+
+	meta {
+		author: "Lily Karim (WDLization by Ash O'Farrell)"
+	}
+
+	output {
+		File? diff = basename_vcf+".diff"
+		File? report = basename_vcf+".report"
+		String errorcode = read_string("ERROR")
+	}
+}
+
 task make_diff_legacy {
 	input {
 		File vcf
