@@ -44,7 +44,10 @@ def dist_matrix(tree, samples):
         s_ancs = path_to_root(tree, s)
         samp_ancs[s] = s_ancs
     #create matrix for samples
-    matrix = np.empty([len(samples),len(samples)])
+    #matrix = np.empty([len(samples),len(samples)])
+    matrix = np.full((len(samples),len(samples)), -1)
+
+    print(matrix)
     for i in range(len(samples)):
         s = samples[i]
 
@@ -53,38 +56,44 @@ def dist_matrix(tree, samples):
             #Future goal: add catch to prevent reiteration of already checked pairs 
             if os == s:
                 matrix[i][j] = '0'
+                print(matrix)
             if os != s:
-                
-                #find lca, add up branch lengths
-                s_path = 0 
-                os_path = 0 
-                for a in samp_ancs[s]:
-                    
-                    s_path += a.dist
-                    if a in samp_ancs[os]:
+                if matrix[i][j] == -1:
+                    #find lca, add up branch lengths
+                    s_path = 0 
+                    os_path = 0 
+                    for a in samp_ancs[s]:
                         
-                        lca = a
-                        s_path -= a.dist
-                        #print(t.get_node(a))
-                        break
-                for a in samp_ancs[os]:
-                    
-                    os_path += a.dist
-                    if a == lca:
-                        #print('os_path', os_path)
-                        os_path -= a.dist
-                        break
-                #print(s,os)
-                #print(s_path, os_path)
-                matrix[i][j] = int(s_path + os_path)
+                        s_path += a.dist
+                        if a in samp_ancs[os]:
+                            
+                            lca = a
+                            s_path -= a.dist
+                            #print(t.get_node(a))
+                            break
+                    for a in samp_ancs[os]:
+                        
+                        os_path += a.dist
+                        if a == lca:
+                            #print('os_path', os_path)
+                            os_path -= a.dist
+                            break
+                    #print(s,os)
+                    #print(s_path, os_path)
+                    matrix[i][j] = int(s_path + os_path)
+                    matrix[j][i] = int(s_path + os_path)
     #print(matrix)
     return samples, matrix                    
     
 
 samps, mat = dist_matrix(t, samps)
 
-#for m in range(len(mat)):
-#    print(mat[m])
+'''
+for i in range(len(mat)):
+    for j in range(len(mat[i])):
+        if mat[i][j] != mat[j][i]:
+            print(i,j)
+            '''
 
 
 print(f'sample\t'+'\t'.join(samps))
