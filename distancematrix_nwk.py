@@ -7,7 +7,7 @@ import tqdm as progressbar
 parser = argparse.ArgumentParser()
 parser.add_argument('tree', type=str,help='path to MAT')
 parser.add_argument('-s', '--samples', required=False, type=str,help='comma separated list of samples')
-parser.add_argument('-stdout', action='store_true', help='print matrix to stdout instead of a file')
+#parser.add_argument('-stdout', action='store_true', help='print matrix to stdout instead of a file')
 
 args = parser.parse_args()
 tree = args.tree
@@ -87,14 +87,10 @@ for i in range(len(mat)):
             print(i,j)
 '''
 
-
-#print(f'sample\t'+'\t'.join(samps))
-for i in range(len(samps)):
-    #strng = np.array2string(mat[i], separator='\t')[1:-1]
-    line = [ str(int(count)) for count in mat[i]]
-    if args.stdout:
-        print(f'{samps[i]}\t' + '\t'.join(line))
-    else:
-        with open(f"{os.path.basename(tree)}distance_matrix.tsv", "w") as outfile:
-            outfile.write(f'{samps[i]}\t' + '\t'.join(line))
-    
+with open(f"{os.path.basename(tree)}distance_matrix.tsv", "a") as outfile:
+    outfile.write(f'sample\t'+'\t'.join(samps))
+    for i in range(len(samps)):
+        #strng = np.array2string(mat[i], separator='\t')[1:-1]
+        line = [ str(int(count)) for count in mat[i]]
+        outfile.write(f'{samps[i]}\t' + '\t'.join(line))
+        
