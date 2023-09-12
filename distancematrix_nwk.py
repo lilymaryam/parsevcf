@@ -92,5 +92,5 @@ with open(f"{os.path.basename(tree)}distance_matrix.tsv", "a") as outfile:
     for i in range(len(samps)):
         #strng = np.array2string(mat[i], separator='\t')[1:-1]
         line = [ str(int(count)) for count in mat[i]]
-        outfile.write(f'{samps[i]}\t' + '\t'.join(line))
+        outfile.write(f'{samps[i]}\t' + '\t'.join(line) + '\n')
         
