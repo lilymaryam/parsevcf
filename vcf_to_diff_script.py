@@ -4,32 +4,36 @@ import gzip
 import logging
 import subprocess
 
+#this script requires individual VCFs
 parser = argparse.ArgumentParser()
-parser.add_argument('-v', '--VCF', required=True, type=str,help='path to VCF to be processed')
+parser.add_argument('-v', '--VCF', required=True, type=str,help='path to single-sample VCF')
 parser.add_argument('-d', '--working_directory', required=True, type=str, help='directory for all outputs (make sure this directory will have enough space!!!!)')
-parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='path to bed file of commonly masked TB regions')
-parser.add_argument('-bed', '--bedgraph', required=False, type=str, help="path to bed coverage file (bedgraph) for vcf (note: can only be used with single-sample vcfs)")
+parser.add_argument('-smf', '--species_maskfile', required=False, type=str, help='path to bed file of commonly masked regions of genome')
+parser.add_argument('-bed', '--bedgraph', required=False, type=str, help="path to bed coverage file (bedgraph) for vcf")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="minimum coverage depth for any given call before that call is considered dubious")
 parser.add_argument('-l', '--logging', required=False, default=True, type=bool, help="if True, logging.debug verbose logging to diff.log, else suppress most logging")
 
 args = parser.parse_args()
 vcf = args.VCF
 wd = args.working_directory
-tbmf = args.tb_maskfile
+smf = args.species_maskfile
 bed = args.bedgraph
 min_coverage = args.coverage_depth
-if args.logging is True:
-    logging.basicConfig(filename=f"{os.path.basename(vcf[:-4])}.log", filemode='a', level=logging.DEBUG,
-        format="%(asctime)s %(funcName)s@%(lineno)d::%(levelname)s: %(message)s", datefmt="%I:%M:%S %p")
-    logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\ttbmf={tbmf}\n\tbed={bed}\n\tmin_coverage={min_coverage}\n\tl={args.logging}")
-else:
-    logging.basicConfig(level=logging.WARNING)
-
-len_ref = 4411532
-
 #makes sure input path wont cause error
 if wd[-1] != '/':
     wd = wd+'/'
+
+if args.logging is True:
+    logging.basicConfig(filename=f"{wd}{os.path.basename(vcf[:-4])}.log", filemode='a', level=logging.DEBUG,
+        format="%(asctime)s %(funcName)s@%(lineno)d::%(levelname)s: %(message)s", datefmt="%I:%M:%S %p")
+    logging.info(f"Arguments:\n\tvcf = {vcf}\n\twd = {wd}\n\tsmf={smf}\n\tbed={bed}\n\tmin_coverage={min_coverage}\n\tl={args.logging}")
+else:
+    logging.basicConfig(level=logging.WARNING)
+
+#len_ref = 4411532
+
+
+
 
 #Functions                        
 def find_snps(line):
@@ -99,17 +103,17 @@ def process_others(line):
 
     return l
 
-def mask_TB(tbmf):
+def mask_TB(smf):
     '''
     Opens and reads bed file containing universally ignored TB positions
     note: bed coverage file is 0 indexed, so 1 added to everything 
     Args:
-        tbmf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
+        smf: bed file with positions to be ignored (note positions are assumed to be 0 indexed)
     Output:
         tb_sites: dictionary where key is start of masked region (1 index) and value is end of masked region (not inclusive)
     '''
     tb_sites = {}
-    with open(tbmf) as file:
+    with open(smf) as file:
         for line in file:
             line=line.strip().split()
             tb_sites[int(line[1])+1] = int(line[2])+1
@@ -132,28 +136,30 @@ def mask_low_depth(bed, min_coverage):
         for line in cf:
             #might need to delete or change this
             #for currect bed coverage file 
-            if line.startswith('NC_000962.3'):
-                line = line.strip().split()
-                #re-index to match VCF
-                line[1] = str(int(line[1])+1)
-                line[2] = str(int(line[2])+1)
-                #if the coverage is below min_coverage
-                if int(line[3]) < min_coverage:
-                    if prev == None:
-                        #for first low-coverage line in file
+            #NEED TO FIX FOR TAYLOR
+            #if line.startswith('NC_000962.3'):
+            #assumes a single reference is used
+            line = line.strip().split()
+            #re-index to match VCF
+            line[1] = str(int(line[1])+1)
+            line[2] = str(int(line[2])+1)
+            #if the coverage is below min_coverage
+            if int(line[3]) < min_coverage:
+                if prev == None:
+                    #for first low-coverage line in file
+                    low_depth_sites[int(line[1])] = int(line[2])
+                    prev = [int(line[1]), int(line[2])]
+                else:
+                    #for all subsequent low-coverage lines, determine if they can be combined 
+                    #if start of line is the same as the end of prev
+                    if int(line[1]) == prev[1]:
+                        #combine sites and update prev
+                        low_depth_sites[prev[0]] = int(line[2])
+                        prev[1] = int(line[2])
+                    #create a new site and update prev
+                    else:
                         low_depth_sites[int(line[1])] = int(line[2])
                         prev = [int(line[1]), int(line[2])]
-                    else:
-                        #for all subsequent low-coverage lines, determine if they can be combined 
-                        #if start of line is the same as the end of prev
-                        if int(line[1]) == prev[1]:
-                            #combine sites and update prev
-                            low_depth_sites[prev[0]] = int(line[2])
-                            prev[1] = int(line[2])
-                        #create a new site and update prev
-                        else:
-                            low_depth_sites[int(line[1])] = int(line[2])
-                            prev = [int(line[1]), int(line[2])]
     #this conditional might need to be fixed if there are no low-coverage areas
     if low_depth_sites == {}:
         raise Exception('coverage file has incorrect reference')
@@ -386,7 +392,7 @@ def squish(lines):
     #should i overwrite lines variable for storage consideration?
     return newLines
 
-def vcf_to_diff(vcf_file):
+def vcf_to_diff(vcf_file, sample):
     '''
     takes a single sample vcf and converts to diff format
     NOTE: this function makes the assumption that incoming diff file is genotyped as diploid
@@ -396,6 +402,7 @@ def vcf_to_diff(vcf_file):
     Outputs:
         diff_formatted_lines: a list of diff-formatted lines for the file
     ''' 
+
     lines = []
     with open(vcf_file, 'rt') as v:
         #missing = 0
@@ -407,7 +414,6 @@ def vcf_to_diff(vcf_file):
                 if line.startswith('#'):
                     line = line.strip().split()
                     #last column name is single-sample vcf will be sample name
-                    sample = line[-1]
                     #make diff file header
                     lines.append([f'>{sample}'])
                 #all position lines
@@ -426,6 +432,7 @@ def vcf_to_diff(vcf_file):
                     
                     #if genotype is not reference allele
                     if var != '0/0':
+
                         #logging.debug("Not a reference allele")
                         #logging.debug('line',line)
                         #logging.debug('alleles', alleles)
@@ -444,39 +451,42 @@ def vcf_to_diff(vcf_file):
                         #assumes diploid genotype
                         #if genotype is heterozygous and reference position is not and indel
                         #NOTE: may need to change this later when indels are not ignored by usher 
-                        elif genos[0]!= genos[1] and len(line[3])==1:
-                            #logging.debug("Hetero")
-                            #logging.debug('HETERO', line)
-                            #logging.debug('genos', genos)
-                            #logging.debug('alleles', alleles)
-                            
-                            IUPAC = {
-                                'R':['A','G'], 
-                                'Y':['C','T'],
-                                'S':['C','G'],
-                                'W':['A','T'],
-                                'K':['G','T'],
-                                'M':['A','C']   
-                                    }
-                            
-                            #generated sorted list of both alleles genotyped 
-                            vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
-                            logging.debug('vars', vars)
-                            #if the heterozygous position is a SNP, replace with an IUPAC symbol
-                            if len(vars[0])==len(vars[1])==1:
-                                logging.debug('SNP')
-                                for key in IUPAC:
-                                    if IUPAC[key] == vars:
-                                        logging.debug('IUPAC key', key)
-                                        #alts = line[4].split(',')
-                                        #alt = alts[int(var)-1]
-                                        line[4] = key
-                                        line[-1] = '1'
-                                        logging.debug('line after ', line)
-                                        break
+                    
+                        
+                        if len(genos) > 1 and genos[0]!= genos[1]:
+                            if len(line[3])==1:
+                                #logging.debug("Hetero")
+                                #logging.debug('HETERO', line)
+                                #logging.debug('genos', genos)
+                                #logging.debug('alleles', alleles)
+                                
+                                IUPAC = {
+                                    'R':['A','G'], 
+                                    'Y':['C','T'],
+                                    'S':['C','G'],
+                                    'W':['A','T'],
+                                    'K':['G','T'],
+                                    'M':['A','C']   
+                                        }
+                                
+                                #generated sorted list of both alleles genotyped 
+                                vars = sorted([alleles[int(genos[0])], alleles[int(genos[1])]])
+                                logging.debug('vars', vars)
+                                #if the heterozygous position is a SNP, replace with an IUPAC symbol
+                                if len(vars[0])==len(vars[1])==1:
+                                    logging.debug('SNP')
+                                    for key in IUPAC:
+                                        if IUPAC[key] == vars:
+                                            logging.debug('IUPAC key', key)
+                                            #alts = line[4].split(',')
+                                            #alt = alts[int(var)-1]
+                                            line[4] = key
+                                            line[-1] = '1'
+                                            logging.debug('line after ', line)
+                                            break
 
                             ##if one of the vars is an indel, mask the position       
-                            else:
+                            if len(line[3])>1:
                                 logging.info('one of alleles is an indel, mask the ref for clarity')
                                 logging.debug(line)
                                 line[4] = '-'
@@ -520,7 +530,8 @@ def vcf_to_diff(vcf_file):
                                 lines.append(newline)
     
     #compress adjacent diff lines where possible 
-    diff_formatted_lines = squish(lines)
+    #diff_formatted_lines = squish(lines)
+    diff_formatted_lines = lines
     return diff_formatted_lines
 
 def make_files(samps,wd):
@@ -784,7 +795,7 @@ def check_prev_line(prev, line):
 
 #def interpret_overlap()  
 
-def mask_and_write_diff(low_depth_sites, tb_masks, lines, samps):
+def mask_and_write_diff(low_depth_sites, tb_masks, lines):
     '''
     iterate through masking regions and lines of diff file to mask positions
     args:
@@ -1290,6 +1301,7 @@ def missing_check(lenref, low_depth_sites):
 
 
 #SCRIPT STARTS HERE
+#notes: MAKE SURE that all of your data is in the same coordinates (i think this is all 0-coords)<-- double check this
 if __name__ == "__main__":
 
     binary = True
@@ -1300,58 +1312,80 @@ if __name__ == "__main__":
             binary = False
 
     logging.info("Reading vcf...")
-    if binary == True:
-        lenRow, samps = count_samples_bin(vcf)
-    else:
-        lenRow, samps = count_samples(vcf)
+    #DEPRECATED: not dealing with large VCFs anymore
+    #if binary == True:
+    #    lenRow, samps = count_samples_bin(vcf)
+    #else:
+    #    lenRow, samps = count_samples(vcf)
 
     #be careful w dictionaries!!!
-    files = make_files(samps, wd)
+    #files = make_files(samps, wd)
+    #print(files)
+    #print('files', files)
 
-    if binary == True:
-        read_VCF_bin(vcf, files)
-    else:
-        read_VCF(vcf, files)
+    #if binary == True:
+    #    read_VCF_bin()
+    #else:
+    #    read_VCF(vcf, files)
 
+    #TB specific, leaving code here in case masking known low-quality sites is relevant
     logging.info("Masking known-to-be-ornery sites...")
-    masks = mask_TB(tbmf)
+    if smf != None:
+        masks = mask_TB(smf)
+    else:
+        masks = {}
     #this is not parallelized, the more samples in the vcf the longer this will take
     #note if a multisample VCF is submitted to this script, there is no way to mask low-depth
 
-    for f in files:
-        print('files', files)
-        logging.debug(f"For {f} in {files}")
+    #for f in files:
+    #    print('files', files)
+    #    print(files)
+    #    logging.debug(f"For {f} in {files}")
 
         #find low coverage regions for each sample 
-        if bed != None:
-            low_depth_sites = mask_low_depth(bed,min_coverage)
-        else:
-            low_depth_sites = None
+    if bed != None:
+        low_depth_sites = mask_low_depth(bed,min_coverage)
+    else:
+        low_depth_sites = None
 
-        sample = os.path.basename(files[f])[:-4]
-        logging.info(f'Working on sample {sample}')
-        filepath = files[f]
-        subprocess.run(f"bcftools annotate -x '^FORMAT/GT' -O v -o {filepath}.filt {filepath}", shell=True, check=True)
-
-        #currently quality assessment requires a coverage file, if coverage not provided the script will fail 
-        low_coverage_as_fraction = missing_check(len_ref, low_depth_sites)
-
-        #if there is a provided coverage file it will be used to mask low coverage (less than min_coverage) regions 
-        #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
-        diff_formatted_lines = vcf_to_diff(f'{filepath}.filt')
-        subprocess.run(['rm', f'{filepath}.filt'], check=True)
-
-        all_lines = mask_and_write_diff(low_depth_sites, masks, diff_formatted_lines, samps)
-       
-        logging.info('Masking to reference...')
+    sample = os.path.basename(vcf)[:-4]
+    print(sample)
+    logging.info(f'Working on sample {sample}')
+    #filepath = files[f]
+    #
+    subprocess.run(f"bcftools annotate -x ^FORMAT/GT -O v -o {wd}{sample}.filt.vcf {vcf}", shell=True, check=True)
+    myfile = f'{wd}{sample}.filt.vcf'
+    #currently quality assessment requires a coverage file, if coverage not provided the script will fail 
+    #if low_depth_sites != None:
+    #    low_coverage_as_fraction = missing_check(len_ref, low_depth_sites)
+    #else: 
+    #    low_coverage_as_fraction = 'N/A'
+    
+    #if there is a provided coverage file it will be used to mask low coverage (less than min_coverage) regions 
+    #note that only one coverage file can be provided and it will result in an error if the vcf has more samples than coverage files 
+    #print('files[f]', files[f])
+    diff_formatted_lines = vcf_to_diff(myfile, sample)
+    #subprocess.run(['rm', f'{filepath}.filt'], check=True)
+    print(diff_formatted_lines)
+    
+    if low_depth_sites != None:
+        all_lines = mask_and_write_diff(low_depth_sites, masks, diff_formatted_lines)
+    else: 
+        all_lines = diff_formatted_lines
+    
+    logging.info('Masking to reference...')
+    if masks != {}:
         final_lines = mask2ref(all_lines, masks)
         #can I delete all_lines
         logging.info('Writing results...')
+    else: 
+        final_lines = all_lines
 
-        with open(f'{wd}{sample}.report','w') as o:
-            o.write(f'{sample}.diff\t{low_coverage_as_fraction}\t{min_coverage}\n')
-        with open(f'{wd}{sample}.diff','w') as o:
-            for line in final_lines:
-                o.write('\t'.join(line)+'\n')
+    #with open(f'{wd}{sample}.report','w') as o:
+    #    o.write(f'{sample}.diff\t{low_coverage_as_fraction}\t{min_coverage}\n')
+    with open(f'{wd}{sample}.diff','w') as o:
+        for line in final_lines:
+            o.write('\t'.join(line)+'\n')
         
     logging.info("Finished")
+    
