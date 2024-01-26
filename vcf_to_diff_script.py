@@ -386,6 +386,15 @@ def squish(lines):
     #should i overwrite lines variable for storage consideration?
     return newLines
 
+def check_filter(line):
+    #only look at snp failures bc everything else gets masked 
+    #if line[6] != 'PASS' and line[-1] != './.' and len(line[3]) == 1 and len(line[4])==1:
+    if line[6] != 'PASS' and line[-1] != './.':
+        print('fail', line)
+        line[-1] = './.'
+        
+    return line
+
 def vcf_to_diff(vcf_file):
     '''
     takes a single sample vcf and converts to diff format
@@ -414,6 +423,11 @@ def vcf_to_diff(vcf_file):
                 else:
                     #total += int(len(line[3]))
                     line = line.strip().split()
+                    line = check_filter(line)
+                    #print('change', line)
+                    #if line[6] != 'PASS':
+                    #    print(line)
+                    #if line[6] == 'PASS':
                     #genotype
                     var = line[-1]
 
@@ -436,8 +450,10 @@ def vcf_to_diff(vcf_file):
                         if var == './.':
                             #potentially useful to track number of positions with missing info 
                             #missing += int(len(line[3]))
+                            #print()
                             line[4] = '-'
                             line [-1] = '1'
+                            print('missing', line)
                             #logging.debug("Missing info")
                             #logging.debug('missing', line)
 
@@ -498,6 +514,7 @@ def vcf_to_diff(vcf_file):
                         #if len of ref position and len of alt are both one, process as a SNP
                         if len(line[3]) == 1:
                             if len(line[4]) == 1:
+                                print('line added', line[4],line[1], '1' )
                                 lines.append([line[4],line[1], '1'])
                             #if len(line[4]) > 1, the position is an insertion which will not be included in the file
 
@@ -505,20 +522,23 @@ def vcf_to_diff(vcf_file):
                             if len(line[4]) == len(line[3]):
                                 #if the ref and alt are both longer than 1 but equal to each other,
                                 #search through alt for snps
+                                print('edge case', line)
                                 newlines = find_snps(line)
                                 for n in newlines:
                                     lines.append(n)
 
                             elif len(line[4]) == 1:
                                 #if ref is >1 and alt=1, process line as a simple deletion
+                                print('deletion', line)
                                 newline = process_dels(line)
                                 lines.append(newline)
 
                             else:
                                 #if len(ref) and len(alt) are both greater than 1 but not the same len as each other
+                                print('edge case', line)
                                 newline = process_others(line)
                                 lines.append(newline)
-    
+                        print('newline',lines[-1])
     #compress adjacent diff lines where possible 
     diff_formatted_lines = squish(lines)
     return diff_formatted_lines
