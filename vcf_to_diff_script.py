@@ -159,185 +159,6 @@ def mask_low_depth(bed, min_coverage):
         raise Exception('coverage file has incorrect reference')
 
     return low_depth_sites
-
-"""
-NOT FOR USE WITH UNIVERSAL MASK2REF
-def check_prev_mask(prev, line):
-    '''
-    when merging low depth and tb masks, make sure the masks are not overlapping with previously added masks
-    Args:
-        prev: a list of the start and stop of the previously added mask region 
-        line: a list of the start and stop of the to-be-added mask region
-    Output:
-        overlap: a boolean meant to indicate if prev and line overlap
-        change: a list containing important information for updating the prev value
-    '''
-    #currently not checking overlap to left of prev bc that indicates a bigger error
-    #may need to change?
-    overlap = False
-    change = None
-    
-    prev_s = int(prev[0])
-    prev_e = int(prev[1])
-    line_s = int(line[0])
-    line_e = int(line[1])
-
-    '''
-    DEBUGGING
-    logging.debug('prev', prev_s, prev_e, 'line', line_s, line_e)
-    '''
-
-    #NO OTHER CONDITIONALS NEEDED BC LINE CANT BE TO THE LEFT OF PREV AND IF LINE HAS NO OVERLAP W PREV NO TRACKING IS NEEDED 
-    #add error checking to make sure line isn't to left of prev?
-
-    #if line is completely contained inside prev, line should not be added to all_sites 
-    if line_s >= prev_s and line_e <= prev_e:
-        overlap = True
-    #if line is overlapping the right end of prev
-    elif line_s >= prev_s and line_s <= prev_e and line_e >= prev_e:
-        overlap = True 
-        prev[1] = line_e
-        change = prev
-    return overlap, change
-
-
-def condense_mask_regions(low_depth_sites,tb_sites):
-    '''
-    for instances with low-depth masking, combine low-depth masks and universal masks into a single data structure 
-    Args: 
-        low_depth_sites: a dictionary containing low-depth sites to be masked
-        tb_sites: a dictionary containing universal masking sites 
-    Output:
-        all_sites: a dictionary containing all masking sites from both universal and low-depth
-    '''
-    #editing thought: would likely benefit from being a list rather than a dictionary 
-    tb_keys = sorted(tb_sites.keys())
-    ld_keys = sorted(low_depth_sites.keys())
-    all_sites = {}
-    tb_keys_ind = 0
-    ld_keys_ind = 0
-    #cont = 0
-
-    #track previous line in all_sites
-    prev = None
-    #iterate through tb_keys and ld_keys exactly 1 time, track index of keys as you iterate
-    while tb_keys_ind < len(tb_keys) or ld_keys_ind < len(ld_keys):
-        #if still iterating through both lists
-        if tb_keys_ind < len(tb_keys) and ld_keys_ind < len(ld_keys): 
-            tb_start = tb_keys[tb_keys_ind]
-            tb_end =  tb_sites[tb_keys[tb_keys_ind]]
-            ld_start = ld_keys[ld_keys_ind]
-            ld_end = low_depth_sites[ld_keys[ld_keys_ind]]
-
-            if ld_start < tb_start:
-                if ld_end < tb_start:
-                    #the low-depth site is completely to the left of the universal site
-                    if prev != None:
-                        #before adding to all_sites, make sure it doesn't overlap prev
-                        overlap, change = check_prev_mask(prev, [ld_start, ld_end])
-                        #if overlap is detected AND requires prev to be updated
-                        if overlap == True and change != None:
-                            #update prev in all_sites
-                            all_sites[change[0]] = change[1]
-                    if prev == None or overlap == False:
-                        #add new site to all_sites
-                        all_sites[ld_start] = ld_end
-                    #update ld index because site was processed
-                    ld_keys_ind += 1
-                elif ld_end >= tb_start:
-                    #this accounts for ld overlapping tb on the left
-                    if prev != None:
-                        overlap, change = check_prev_mask(prev, [ld_start, tb_end])
-                        if overlap == True and change != None:
-                            #if new region overlaps, update prev
-                            all_sites[change[0]] = change[1]
-                    #if there is no overlap, add new region to all_sites
-                    if prev == None or overlap == False:
-                        all_sites[ld_start] = tb_end
-                    #since both regions are added at the same time, update index for both lists
-                    tb_keys_ind += 1
-                    ld_keys_ind += 1
-            
-            elif ld_start <= tb_end and ld_end > tb_end:
-                #if ld overlaps tb on the right
-                if prev != None:
-                    #before adding to all_sites, make sure it doesn't overlap prev
-                    overlap,change = check_prev_mask(prev, [tb_start, ld_end])
-                    if overlap == True and change != None:
-                        all_sites[change[0]] = change[1]
-                #if there is no overlap, add new region to all_sites
-                if prev == None or overlap == False:
-                    all_sites[tb_start] = ld_end
-                #since both regions are added at the same time, update index for both lists
-                tb_keys_ind += 1
-                ld_keys_ind += 1
-
-            elif ld_start > tb_end:
-                #if there is no overlap between ld and tb, and ld is on the right
-                if prev != None:
-                    #before adding to all_sites, make sure it doesn't overlap prev
-                    overlap,change = check_prev_mask(prev, [tb_start, tb_end])
-                    if overlap == True and change != None:
-                        all_sites[change[0]] = change[1]
-                if prev == None or overlap == False:
-                    #if there is no overlap, add new region to all_sites
-                    all_sites[tb_start] = tb_end
-                tb_keys_ind += 1
-
-            elif ld_start >= tb_start and ld_end <= tb_end:
-                # if tb and ld fully overlap with ld inside
-                if prev != None:
-                    #make sure tb doesnt overlap prev 
-                    overlap,change = check_prev_mask(prev, [tb_start, tb_end])
-                    if overlap == True and change != False:
-                        all_sites[change[0]] = change[1]
-                if prev == None or overlap == False:
-                    all_sites[tb_start] = tb_end
-                tb_keys_ind += 1
-                ld_keys_ind += 1
-
-            
-            elif ld_start <= tb_start and ld_end >= tb_end:
-                #if ld and tb fully overlap with tb inside
-                if prev != None:
-                    #make sure ld doesnt overlap prev
-                    overlap,change = check_prev_mask(prev, [ld_start, ld_end])
-                    if overlap == True and change != None:
-                        all_sites[change[0]] = change[1]
-                if prev == None or overlap == False:
-                    all_sites[ld_start] = ld_end
-                tb_keys_ind += 1
-                ld_keys_ind += 1
-                
-            #covered all 6 possible positions of the two regions
-            '''
-            DEBUG
-            logging.debug('ld',ld_keys[ld_keys_ind], low_depth_sites[ld_keys[ld_keys_ind]])
-            '''
-
-        #possible bug: prev overlaps with one list the first time the other list expires
-        elif tb_keys_ind >= len(tb_keys) and ld_keys_ind < len(ld_keys):
-            #if reach end of tb_masks process ld only
-            ld_start = ld_keys[ld_keys_ind]
-            ld_end = low_depth_sites[ld_keys[ld_keys_ind]]
-            all_sites[ld_start] = ld_end
-            ld_keys_ind += 1
-
-        #possible bug: prev overlaps with one list the first time the other list expires
-        elif ld_keys_ind >= len(ld_keys) and tb_keys_ind < len(tb_keys):
-            #if reach end of ld masks process tb only
-            tb_start = tb_keys[tb_keys_ind]
-            tb_end = tb_sites[tb_keys[tb_keys_ind]]
-            all_sites[tb_start] = tb_end
-            tb_keys_ind += 1 
-
-        #keep all sites sorted
-        if len(all_sites) > 0:
-            all_sites_keys = sorted(all_sites.keys())
-        #track last site for every iteration
-        prev = [all_sites_keys[-1],all_sites[all_sites_keys[-1]]]
-    return all_sites
-    """
                     
 def squish(lines):
     '''
@@ -390,7 +211,8 @@ def check_filter(line):
     #only look at snp failures bc everything else gets masked 
     #if line[6] != 'PASS' and line[-1] != './.' and len(line[3]) == 1 and len(line[4])==1:
     if line[6] != 'PASS' and line[-1] != './.':
-        print('fail', line)
+        #print('fail', line)
+        #mark line as missing so it is masked without needing a bunch of new conditionals
         line[-1] = './.'
         
     return line
@@ -453,7 +275,7 @@ def vcf_to_diff(vcf_file):
                             #print()
                             line[4] = '-'
                             line [-1] = '1'
-                            print('missing', line)
+                            #print('missing', line)
                             #logging.debug("Missing info")
                             #logging.debug('missing', line)
 
@@ -514,7 +336,7 @@ def vcf_to_diff(vcf_file):
                         #if len of ref position and len of alt are both one, process as a SNP
                         if len(line[3]) == 1:
                             if len(line[4]) == 1:
-                                print('line added', line[4],line[1], '1' )
+                                #print('line added', line[4],line[1], '1' )
                                 lines.append([line[4],line[1], '1'])
                             #if len(line[4]) > 1, the position is an insertion which will not be included in the file
 
@@ -522,23 +344,23 @@ def vcf_to_diff(vcf_file):
                             if len(line[4]) == len(line[3]):
                                 #if the ref and alt are both longer than 1 but equal to each other,
                                 #search through alt for snps
-                                print('edge case', line)
+                                #print('edge case', line)
                                 newlines = find_snps(line)
                                 for n in newlines:
                                     lines.append(n)
 
                             elif len(line[4]) == 1:
                                 #if ref is >1 and alt=1, process line as a simple deletion
-                                print('deletion', line)
+                                #print('deletion', line)
                                 newline = process_dels(line)
                                 lines.append(newline)
 
                             else:
                                 #if len(ref) and len(alt) are both greater than 1 but not the same len as each other
-                                print('edge case', line)
+                                #print('edge case', line)
                                 newline = process_others(line)
                                 lines.append(newline)
-                        print('newline',lines[-1])
+                        #print('newline',lines[-1])
     #compress adjacent diff lines where possible 
     diff_formatted_lines = squish(lines)
     return diff_formatted_lines
@@ -1129,117 +951,8 @@ def mask2ref(lines, tb_masks):
             final.append(lines[lines_ind])
             lines_ind += 1
 
-        #elif tb_keys_ind < len(tb_keys) and lines_ind == len(lines):
-        #    logging.debug(lines[lines_ind])
-        #    final.append(lines[lines_ind])
-        #    lines_ind += 1
-
         
-
-            """
-                elif ld_end >= tb_start:
-                    #this accounts for ld overlapping tb on the left
-                    if prev != None:
-                        overlap, change = check_prev_mask(prev, [ld_start, tb_end])
-                        if overlap == True and change != None:
-                            #if new region overlaps, update prev
-                            all_sites[change[0]] = change[1]
-                    #if there is no overlap, add new region to all_sites
-                    if prev == None or overlap == False:
-                        all_sites[ld_start] = tb_end
-                    #since both regions are added at the same time, update index for both lists
-                    tb_keys_ind += 1
-                    ld_keys_ind += 1
-            
-            elif ld_start <= tb_end and ld_end > tb_end:
-                #if ld overlaps tb on the right
-                if prev != None:
-                    #before adding to all_sites, make sure it doesn't overlap prev
-                    overlap,change = check_prev_mask(prev, [tb_start, ld_end])
-                    if overlap == True and change != None:
-                        all_sites[change[0]] = change[1]
-                #if there is no overlap, add new region to all_sites
-                if prev == None or overlap == False:
-                    all_sites[tb_start] = ld_end
-                #since both regions are added at the same time, update index for both lists
-                tb_keys_ind += 1
-                ld_keys_ind += 1
-
-            elif ld_start > tb_end:
-                #if there is no overlap between ld and tb, and ld is on the right
-                if prev != None:
-                    #before adding to all_sites, make sure it doesn't overlap prev
-                    overlap,change = check_prev_mask(prev, [tb_start, tb_end])
-                    if overlap == True and change != None:
-                        all_sites[change[0]] = change[1]
-                if prev == None or overlap == False:
-                    #if there is no overlap, add new region to all_sites
-                    all_sites[tb_start] = tb_end
-                tb_keys_ind += 1
-
-            elif ld_start >= tb_start and ld_end <= tb_end:
-                # if tb and ld fully overlap with ld inside
-                if prev != None:
-                    #make sure tb doesnt overlap prev 
-                    overlap,change = check_prev_mask(prev, [tb_start, tb_end])
-                    if overlap == True and change != False:
-                        all_sites[change[0]] = change[1]
-                if prev == None or overlap == False:
-                    all_sites[tb_start] = tb_end
-                tb_keys_ind += 1
-                ld_keys_ind += 1
-
-            
-            elif ld_start <= tb_start and ld_end >= tb_end:
-                #if ld and tb fully overlap with tb inside
-                if prev != None:
-                    #make sure ld doesnt overlap prev
-                    overlap,change = check_prev_mask(prev, [ld_start, ld_end])
-                    if overlap == True and change != None:
-                        all_sites[change[0]] = change[1]
-                if prev == None or overlap == False:
-                    all_sites[ld_start] = ld_end
-                tb_keys_ind += 1
-                ld_keys_ind += 1
-                
-            #covered all 6 possible positions of the two regions
-            '''
-            DEBUG
-            logging.debug('ld',ld_keys[ld_keys_ind], low_depth_sites[ld_keys[ld_keys_ind]])
-            '''
-
-        #possible bug: prev overlaps with one list the first time the other list expires
-        elif tb_keys_ind >= len(tb_keys) and ld_keys_ind < len(ld_keys):
-            #if reach end of tb_masks process ld only
-            ld_start = ld_keys[ld_keys_ind]
-            ld_end = low_depth_sites[ld_keys[ld_keys_ind]]
-            all_sites[ld_start] = ld_end
-            ld_keys_ind += 1
-
-        #possible bug: prev overlaps with one list the first time the other list expires
-        elif ld_keys_ind >= len(ld_keys) and tb_keys_ind < len(tb_keys):
-            #if reach end of ld masks process tb only
-            tb_start = tb_keys[tb_keys_ind]
-            tb_end = tb_sites[tb_keys[tb_keys_ind]]
-            all_sites[tb_start] = tb_end
-            tb_keys_ind += 1 
-
-        #keep all sites sorted
-        if len(all_sites) > 0:
-            all_sites_keys = sorted(all_sites.keys())
-        #track last site for every iteration
-        prev = [all_sites_keys[-1],all_sites[all_sites_keys[-1]]]
-        """
-        #cont += 1
-        #if cont == 1000:
-        #    break
         elif tb_keys_ind < len(tb_keys) and lines_ind == len(lines):
-            #if lines finish before masks, end while loop
-            #we are masking to ref so we don't have to keep going through masks
-            #break
-            #logging.debug(lines[lines_ind])
-            #final.append(lines[lines_ind])
-            #tb_keys_ind += 1
             break
         else:
             logging.warning('this probably should not happen')
