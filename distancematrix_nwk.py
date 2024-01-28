@@ -39,6 +39,7 @@ def dist_matrix(tree, samples):
     for s in progressbar.tqdm(samples, desc="Finding roots and branch lengths"):
         s_ancs = path_to_root(tree, s)
         samp_ancs[s] = s_ancs
+        logging.debug(f"sample {s} has path {samp_ancs}")
     
     #create matrix for samples
     matrix = np.full((len(samples),len(samples)), -1)
