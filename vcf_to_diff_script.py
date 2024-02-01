@@ -10,7 +10,7 @@ parser.add_argument('-d', '--working_directory', required=True, type=str, help='
 parser.add_argument('-tbmf', '--tb_maskfile', required=True, type=str, help='path to bed file of commonly masked TB regions')
 parser.add_argument('-bed', '--bedgraph', required=False, type=str, help="path to bed coverage file (bedgraph) for vcf (note: can only be used with single-sample vcfs)")
 parser.add_argument('-cd', '--coverage_depth', required=False, default=10, type=int, help="minimum coverage depth for any given call before that call is considered dubious")
-parser.add_argument('-l', '--logging', required=False, default=True, type=bool, help="if True, logging.debug verbose logging to diff.log, else suppress most logging")
+parser.add_argument('-l', '--logging', action='store_true', help="if set, logging.debug verbose logging sent to (sample-name).log, else suppress most logging")
 
 args = parser.parse_args()
 vcf = args.VCF
