@@ -1353,8 +1353,8 @@ if __name__ == "__main__":
     logging.info(f'Working on sample {sample}')
     #filepath = files[f]
     #
-    subprocess.run(f"bcftools annotate -x ^FORMAT/GT -O v -o {wd}{sample}.filt.vcf {vcf}", shell=True, check=True)
-    myfile = f'{wd}{sample}.filt.vcf'
+    #subprocess.run(f"bcftools annotate -x ^FORMAT/GT -O v -o {wd}{sample}.filt.vcf {vcf}", shell=True, check=True)
+    myfile = f'{vcf}'
     #currently quality assessment requires a coverage file, if coverage not provided the script will fail 
     #if low_depth_sites != None:
     #    low_coverage_as_fraction = missing_check(len_ref, low_depth_sites)
